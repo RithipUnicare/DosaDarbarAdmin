@@ -5,6 +5,8 @@ import HomeScreen from "./Components/HomeScreen";
 import CategoriesScreen from "./Components/Category";
 import GetProductsScreen from "./Components/GetProducts";
 import CartDetailsScreen from "./Components/CardDetails";
+import BillScreen from "./Components/BillScreen";
+
 
 const Stack = createStackNavigator();
 
@@ -21,6 +23,7 @@ export default function App() {
         <Stack.Screen name="Category" component={CategoriesScreen} />
         <Stack.Screen name="GetProducts" component={GetProductsScreen} />
         <Stack.Screen name="CardDetails" component={CartDetailsScreen} />
+        <Stack.Screen name="BillScreen" component={BillScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

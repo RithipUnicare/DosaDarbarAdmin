@@ -50,6 +50,13 @@ interface FormErrorsType {
   [key: string]: string | undefined | null;
 }
 
+interface ConsolidatedBillType {
+  items: CartItemType[];
+  totalAmount: string;
+  userId: string;
+  tableNo: string;
+}
+
 interface CartDetailsScreenProps {
   navigation: any;
 }
@@ -75,14 +82,78 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
   const [formErrors, setFormErrors] = useState<FormErrorsType>({});
 
   const GET_CART_API =
-    'https://deepikagroups.com/Dosadharbar/api/v1/get_cart_detailsAdmin';
+    'https://deepikagroups.in/Dosadharbar/api/v1/get_cart_detailsAdmin';
   const ADD_CART_API =
-    'https://deepikagroups.com/Dosadharbar/api/v1/add_product_cart';
+    'https://deepikagroups.in/Dosadharbar/api/v1/add_product_cart';
   const DELETE_CART_API =
-    'https://deepikagroups.com/Dosadharbar/api/v1/delete_Cart/';
+    'https://deepikagroups.in/Dosadharbar/api/v1/delete_Cart/';
 
   useEffect(() => {
     fetchCartDetails();
+
+    // Add dummy cart items for testing (3-4 items for a user)
+    setTimeout(() => {
+      setCartItems(prev => {
+        if (prev.length === 0) {
+          const dummyItems: CartItemType[] = [
+            {
+              id: 'dummy1',
+              cart_id: 'dummy1',
+              product_id: '101',
+              category_id: '1',
+              product_price: '50.00',
+              quantity: '2',
+              total_amount: '100.00',
+              user_id: '999',
+              tableno: '5',
+              name: 'Masala Dosa',
+              item_image: '',
+            },
+            {
+              id: 'dummy2',
+              cart_id: 'dummy2',
+              product_id: '102',
+              category_id: '1',
+              product_price: '30.00',
+              quantity: '1',
+              total_amount: '30.00',
+              user_id: '999',
+              tableno: '5',
+              name: 'Idli Sambhar',
+              item_image: '',
+            },
+            {
+              id: 'dummy3',
+              cart_id: 'dummy3',
+              product_id: '103',
+              category_id: '2',
+              product_price: '40.00',
+              quantity: '3',
+              total_amount: '120.00',
+              user_id: '999',
+              tableno: '5',
+              name: 'Vada Pav',
+              item_image: '',
+            },
+            {
+              id: 'dummy4',
+              cart_id: 'dummy4',
+              product_id: '104',
+              category_id: '1',
+              product_price: '25.00',
+              quantity: '1',
+              total_amount: '25.00',
+              user_id: '999',
+              tableno: '5',
+              name: 'Filter Coffee',
+              item_image: '',
+            },
+          ];
+          return dummyItems;
+        }
+        return prev;
+      });
+    }, 1500); // Wait for API call to finish
   }, []);
 
   useEffect(() => {
@@ -351,6 +422,25 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
         return total + (parseFloat(item.total_amount as string) || 0);
       }, 0)
       .toFixed(2);
+  };
+
+  const handlePrintAllBill = () => {
+    if (cartItems.length === 0) {
+      Alert.alert('No Items', 'No cart items to print bill for.');
+      return;
+    }
+
+    // Create consolidated bill object
+    const consolidatedBill: ConsolidatedBillType = {
+      items: cartItems,
+      totalAmount: calculateCartTotal(),
+      userId: cartItems[0]?.user_id?.toString() || 'N/A', // Assume all items same user
+      tableNo: cartItems[0]?.tableno?.toString() || 'N/A', // Assume same table
+    };
+
+    navigation.navigate('BillScreen', { 
+      consolidatedBill: consolidatedBill 
+    });
   };
 
   const renderInputField = (
@@ -648,6 +738,14 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
       >
         <Text style={styles.addButtonText}>+ Add Product</Text>
       </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.printAllButton}
+        onPress={handlePrintAllBill}
+        activeOpacity={0.8}
+        disabled={cartItems.length === 0}
+      >
+        <Text style={styles.printAllButtonText}>Print Bill for All Items</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -692,7 +790,6 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
 };
 
 const styles = StyleSheet.create({
-  // ...existing code...
   container: {
     flex: 1,
     backgroundColor: '#000',
@@ -703,7 +800,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingTop: 21,
-    paddingBottom: 30,
+    paddingBottom: 20,
     alignItems: 'center',
   },
   backButton: {
@@ -767,6 +864,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+  printAllButton: {
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 25,
+    paddingVertical: 12,
+    borderRadius: 25,
+    marginTop: 10,
+  },
+  printAllButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
   cartCard: {
     marginBottom: 15,
     borderRadius: 15,
@@ -785,16 +894,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#444',
   },
-  cartItemHeader: {
+  cartItemHeaderRowFixed: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  productIdText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#fff',
+    justifyContent: 'flex-end',
+    alignItems: 'flex-start',
+    marginBottom: 10,
   },
   buttonGroupWithIdFixed: {
     alignItems: 'flex-end',
@@ -809,20 +913,6 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 2,
   },
-  cartItemHeaderRowFixed: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'flex-start',
-    marginBottom: 10,
-  },
-  productIdTextFixed: {
-    fontSize: 12,
-    color: '#fff',
-    textAlign: 'right',
-    marginTop: 2,
-    fontWeight: '500',
-    minWidth: 100,
-  },
   editButton: {
     backgroundColor: '#555',
     paddingHorizontal: 12,
@@ -830,11 +920,6 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     borderWidth: 1,
     borderColor: '#666',
-  },
-  editButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '500',
   },
   quantityButton: {
     backgroundColor: '#4CAF50',
@@ -844,11 +929,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#666',
   },
-  quantityButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
   deleteButton: {
     backgroundColor: '#F44336',
     paddingHorizontal: 12,
@@ -857,11 +937,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#666',
     marginHorizontal: 4,
-  },
-  deleteButtonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
   },
   cartItemImageRow: {
     flexDirection: 'row',
