@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialIcons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { width } = Dimensions.get('window');
 
@@ -33,6 +34,16 @@ interface CartItemType {
   user_id: string | number;
   tableno: string | number;
   name?: string;
+  item_image?: string;
+}
+
+interface ProductType {
+  id: string | number;
+  name: string;
+  category_id: string | number;
+  product_code: string | number;
+  prices: string | number;
+  status: string;
   item_image?: string;
 }
 
@@ -61,10 +72,13 @@ interface CartDetailsScreenProps {
   navigation: any;
 }
 
+const CART_STORAGE_KEY = 'cartItems';
+
 const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
   navigation,
 }) => {
   const [cartItems, setCartItems] = useState<CartItemType[]>([]);
+  const [products, setProducts] = useState<ProductType[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
@@ -80,21 +94,22 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
     tableno: '',
   });
   const [formErrors, setFormErrors] = useState<FormErrorsType>({});
+  const [selectedTable, setSelectedTable] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [tempSelectedItems, setTempSelectedItems] = useState<CartItemType[]>([]);
+  const [showTableModal, setShowTableModal] = useState<boolean>(false);
+  const [newTableNo, setNewTableNo] = useState<string>('');
 
-  const GET_CART_API =
-    'https://deepikagroups.in/Dosadharbar/api/v1/get_cart_detailsAdmin';
-  const ADD_CART_API =
-    'https://deepikagroups.in/Dosadharbar/api/v1/add_product_cart';
-  const DELETE_CART_API =
-    'https://deepikagroups.in/Dosadharbar/api/v1/delete_Cart/';
+  const GET_PRODUCT_API = 'http://unitech.agency/Dosadharbar/api/v1/get_AllproductDetails';
 
   useEffect(() => {
-    fetchCartDetails();
-
-    // Add dummy cart items for testing (3-4 items for a user)
-    setTimeout(() => {
-      setCartItems(prev => {
-        if (prev.length === 0) {
+    const loadCart = async () => {
+      try {
+        const stored = await AsyncStorage.getItem(CART_STORAGE_KEY);
+        if (stored) {
+          setCartItems(JSON.parse(stored));
+        } else {
+          // Add dummy if no stored
           const dummyItems: CartItemType[] = [
             {
               id: 'dummy1',
@@ -149,52 +164,56 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
               item_image: '',
             },
           ];
-          return dummyItems;
+          setCartItems(dummyItems);
         }
-        return prev;
-      });
-    }, 1500); // Wait for API call to finish
+      } catch (error) {
+        console.error('Failed to load cart from storage');
+      }
+      setLoading(false);
+    };
+    loadCart();
+    fetchProducts();
   }, []);
+
+  useEffect(() => {
+    const saveCart = async () => {
+      try {
+        await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
+      } catch (error) {
+        console.error('Failed to save cart to storage');
+      }
+    };
+    saveCart();
+  }, [cartItems]);
 
   useEffect(() => {
     calculateTotalAmount();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData.product_price, formData.quantity]);
 
+  const fetchProducts = async () => {
+    try {
+      const response = await fetch(GET_PRODUCT_API);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const Data = await response.json();
+      const data = Data['Item'] || Data['data'] || [];
+      setProducts(Array.isArray(data) ? data : []);
+    } catch (error: any) {
+      Alert.alert(
+        'Error',
+        'Failed to load products. Please check your internet connection.',
+        [{ text: 'OK', style: 'default' }],
+      );
+    }
+  };
+
   const calculateTotalAmount = () => {
     const price = parseFloat(formData.product_price) || 0;
     const quantity = parseInt(formData.quantity) || 0;
     const total = (price * quantity).toFixed(2);
     setFormData(prev => ({ ...prev, total_amount: total }));
-  };
-
-  const fetchCartDetails = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch(GET_CART_API);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const Data = await response.json();
-      const data = Data['Item'];
-      if (Array.isArray(data)) {
-        setCartItems(data);
-      } else if (data && data.cart_items && Array.isArray(data.cart_items)) {
-        setCartItems(data.cart_items);
-      } else if (data && data.data && Array.isArray(data.data)) {
-        setCartItems(data.data);
-      } else {
-        setCartItems([]);
-      }
-    } catch (error: any) {
-      Alert.alert(
-        'Error',
-        'Failed to load cart details. Please check your internet connection.',
-        [{ text: 'OK', style: 'default' }],
-      );
-    } finally {
-      setLoading(false);
-    }
   };
 
   const validateForm = () => {
@@ -231,12 +250,11 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
     return Object.keys(errors).length === 0;
   };
 
-  const updateCartQuantity = async (
+  const updateCartQuantity = (
     item: CartItemType,
     newQuantity: number,
   ) => {
     if (newQuantity <= 0) return;
-    const originalCartItems = [...cartItems];
     const updatedCartItems = cartItems.map(cartItem =>
       cartItem.product_id === item.product_id &&
       cartItem.user_id === item.user_id &&
@@ -251,75 +269,42 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
         : cartItem,
     );
     setCartItems(updatedCartItems);
-    try {
-      setIsSubmitting(true);
-      const productData = {
-        product_id: parseInt(item.product_id as string),
-        category_id: parseInt(item.category_id as string),
-        product_price: parseFloat(item.product_price as string).toFixed(2),
-        quantity: newQuantity,
-        total_amount: (
-          parseFloat(item.product_price as string) * newQuantity
-        ).toFixed(2),
-        user_id: parseInt(item.user_id as string),
-        tableno: parseInt(item.tableno as string),
-        user_id_str: 'admin',
-      };
-      const response = await fetch(ADD_CART_API, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(productData),
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-    } catch (error: any) {
-      setCartItems(originalCartItems);
-      Alert.alert('Error', 'Failed to update quantity. Please try again.', [
-        { text: 'OK', style: 'default' },
-      ]);
-    } finally {
-      setIsSubmitting(false);
-    }
   };
 
-  const addProductToCart = async (productData: any) => {
-    try {
-      setIsSubmitting(true);
-      const response = await fetch(ADD_CART_API, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(productData),
-      });
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      await fetchCartDetails();
-      resetForm();
-      setShowAddModal(false);
-      setEditingItem(null);
-      Alert.alert(
-        'Success',
-        editingItem
-          ? 'Cart item updated successfully!'
-          : 'Product added to cart successfully!',
-        [{ text: 'OK', style: 'default' }],
+  const addOrUpdateLocalCart = (productData: any, isEdit: boolean) => {
+    if (isEdit && editingItem) {
+      const updatedItems = cartItems.map(i =>
+        i.id === editingItem.id
+          ? {
+              ...i,
+              product_id: productData.product_id,
+              category_id: productData.category_id,
+              product_price: productData.product_price,
+              quantity: productData.quantity,
+              total_amount: productData.total_amount,
+              user_id: productData.user_id,
+              tableno: productData.tableno,
+            }
+          : i,
       );
-    } catch (error: any) {
-      Alert.alert(
-        'Error',
-        editingItem
-          ? 'Failed to update cart item. Please try again.'
-          : 'Failed to add product to cart. Please try again.',
-        [{ text: 'OK', style: 'default' }],
-      );
-    } finally {
-      setIsSubmitting(false);
+      setCartItems(updatedItems);
+    } else {
+      const newId = Date.now().toString();
+      const newItem: CartItemType = {
+        id: newId,
+        cart_id: newId,
+        ...productData,
+      };
+      setCartItems(prev => [...prev, newItem]);
     }
+    resetForm();
+    setShowAddModal(false);
+    setEditingItem(null);
+    Alert.alert(
+      'Success',
+      isEdit ? 'Cart item updated successfully!' : 'Product added to cart successfully!',
+      [{ text: 'OK', style: 'default' }],
+    );
   };
 
   const deleteCartItem = async (item: CartItemType) => {
@@ -331,38 +316,28 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: async () => {
-            try {
-              setIsSubmitting(true);
-              const response = await fetch(
-                `${DELETE_CART_API}${
-                  item.id || item.cart_id || item.product_id
-                }`,
-              );
-              if (!response.ok) throw new Error('Failed to delete cart item');
-              await fetchCartDetails();
-            } catch (e: any) {
-              Alert.alert('Error', e.message || 'Failed to delete cart item', [
-                { text: 'OK' },
-              ]);
-            } finally {
-              setIsSubmitting(false);
-            }
+          onPress: () => {
+            setCartItems(prev => prev.filter(i => i.id !== item.id));
           },
         },
       ],
     );
   };
 
-  const onRefresh = async () => {
+  const onRefresh = () => {
     setRefreshing(true);
-    await fetchCartDetails();
+    fetchProducts();
     setRefreshing(false);
   };
 
   const handleAddProduct = () => {
-    resetForm();
+    if (!selectedTable) {
+      Alert.alert('Select Table', 'Please select or add a table before adding a product.');
+      return;
+    }
+    setTempSelectedItems([]);
     setEditingItem(null);
+    setSearchQuery('');
     setShowAddModal(true);
   };
 
@@ -407,7 +382,79 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
       user_id: parseInt(formData.user_id),
       tableno: parseInt(formData.tableno),
     };
-    addProductToCart(productData);
+    addOrUpdateLocalCart(productData, !!editingItem);
+  };
+
+  const handleAddToTemp = (product: ProductType) => {
+    console.log(product);
+    setTempSelectedItems(prev => {
+      const existing = prev.find(i => i.product_id === product.id);
+      if (existing) {
+        const newQty = parseInt(existing.quantity as string) + 1;
+        return prev.map(i => i.id === existing.id ? {
+          ...i,
+          quantity: newQty,
+          total_amount: (parseFloat(i.product_price as string) * newQty).toFixed(2),
+        } : i);
+      } else {
+        const price = parseFloat(product.prices as string) || 0;
+        const qty = 1;
+        const total = (price * qty).toFixed(2);
+        const newItem: CartItemType = {
+          id: product.id,
+          cart_id: Date.now().toString(),
+          product_id: product.id,
+          category_id: product.category_id,
+          product_price: price.toFixed(2),
+          quantity: qty,
+          total_amount: total,
+          user_id: '999',
+          tableno: selectedTable!,
+          name: product.name,
+          item_image: product.item_image,
+        };
+        return [...prev, newItem];
+      }
+    });
+  };
+
+  const updateTempQuantity = (item: CartItemType, delta: number) => {
+    setTempSelectedItems(prev => {
+      const existing = prev.find(i => i.id === item.id);
+      if (existing) {
+        const newQty = parseInt(existing.quantity as string) + delta;
+        if (newQty <= 0) return prev.filter(i => i.id !== item.id);
+        return prev.map(i => i.id === item.id ? {
+          ...i,
+          quantity: newQty,
+          total_amount: (parseFloat(i.product_price as string) * newQty).toFixed(2),
+        } : i);
+      }
+      return prev;
+    });
+  };
+
+  const removeFromTemp = (item: CartItemType) => {
+    setTempSelectedItems(prev => prev.filter(i => i.id !== item.id));
+  };
+
+  const handleConfirmAdd = () => {
+    setCartItems(prev => {
+      let updated = [...prev];
+      tempSelectedItems.forEach(newItem => {
+        const existing = updated.find(i => i.product_id === newItem.product_id && i.tableno?.toString() === newItem.tableno?.toString());
+        if (existing) {
+          const newQty = parseInt(existing.quantity as string) + parseInt(newItem.quantity as string);
+          const newTotal = (parseFloat(existing.product_price as string) * newQty).toFixed(2);
+          updated = updated.map(i => i.id === existing.id ? { ...i, quantity: newQty, total_amount: newTotal } : i);
+        } else {
+          updated.push(newItem);
+        }
+      });
+      return updated;
+    });
+    setShowAddModal(false);
+    setTempSelectedItems([]);
   };
 
   const handleBackPress = () => {
@@ -416,31 +463,55 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
     }
   };
 
-  const calculateCartTotal = () => {
-    return cartItems
-      .reduce((total, item) => {
-        return total + (parseFloat(item.total_amount as string) || 0);
-      }, 0)
-      .toFixed(2);
-  };
-
   const handlePrintAllBill = () => {
-    if (cartItems.length === 0) {
+    if (!selectedTable || filteredCartItems.length === 0) {
       Alert.alert('No Items', 'No cart items to print bill for.');
       return;
     }
 
-    // Create consolidated bill object
     const consolidatedBill: ConsolidatedBillType = {
-      items: cartItems,
-      totalAmount: calculateCartTotal(),
-      userId: cartItems[0]?.user_id?.toString() || 'N/A', // Assume all items same user
-      tableNo: cartItems[0]?.tableno?.toString() || 'N/A', // Assume same table
+      items: filteredCartItems,
+      totalAmount: filteredCartItems.reduce((sum, item) => sum + (parseFloat(item.total_amount as string) || 0), 0).toFixed(2),
+      userId: filteredCartItems[0]?.user_id?.toString() || 'N/A',
+      tableNo: selectedTable,
     };
 
-    navigation.navigate('BillScreen', { 
-      consolidatedBill: consolidatedBill 
+    navigation.navigate('BillScreen', {
+      consolidatedBill: consolidatedBill,
     });
+  };
+
+  const handleClearCart = () => {
+    if (!selectedTable) return;
+    Alert.alert(
+      'Clear Cart',
+      'Are you sure you want to clear the cart for this table?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Yes',
+          style: 'destructive',
+          onPress: () => {
+            setCartItems(prev => prev.filter(item => item.tableno?.toString() !== selectedTable));
+          },
+        },
+      ],
+    );
+  };
+
+  const handleAddNewTable = () => {
+    setNewTableNo('');
+    setShowTableModal(true);
+  };
+
+  const confirmAddTable = () => {
+    if (newTableNo && !isNaN(parseInt(newTableNo))) {
+      setSelectedTable(newTableNo);
+      setUserTables(prev => prev.includes(newTableNo) ? prev : [...prev, newTableNo]);
+    } else {
+      Alert.alert('Invalid', 'Please enter a valid table number.');
+    }
+    setShowTableModal(false);
   };
 
   const renderInputField = (
@@ -478,6 +549,50 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
     </View>
   );
 
+  const filteredProducts = products.filter(p =>
+    p.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const renderProductItem = ({ item }: { item: ProductType }) => (
+    <TouchableOpacity
+      style={styles.productItem}
+      onPress={() => handleAddToTemp(item)}
+      activeOpacity={0.8}
+    >
+      {item.item_image ? (
+        <Image
+          source={{ uri: `http://deepikagroups.com/Dosadharbar/api/v1/images/${item.item_image}` }}
+          style={styles.productImage}
+          resizeMode="cover"
+        />
+      ) : (
+        <View style={styles.productImagePlaceholder} />
+      )}
+      <View style={styles.productInfo}>
+        <Text style={styles.productName}>{item.name}</Text>
+        <Text style={styles.productPrice}>₹{item.prices}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+
+  const renderTempItem = ({ item }: { item: CartItemType }) => (
+    <View style={styles.tempItem}>
+      <Text style={styles.tempItemName}>{item.name}</Text>
+      <Text style={styles.tempItemPrice}>₹{item.product_price} x {item.quantity} = ₹{item.total_amount}</Text>
+      <View style={styles.tempItemButtons}>
+      <TouchableOpacity onPress={() => updateTempQuantity(item, 1)}>
+          <Icon name="add" size={20} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => updateTempQuantity(item, -1)}>
+          <Icon name="remove" size={20} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => removeFromTemp(item)}>
+          <Icon name="close" size={20} color="#F44336" />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   const renderAddModal = () => (
     <Modal
       visible={showAddModal}
@@ -487,6 +602,8 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
         setShowAddModal(false);
         setEditingItem(null);
         resetForm();
+        setSearchQuery('');
+        setTempSelectedItems([]);
       }}
     >
       <View style={styles.modalOverlay}>
@@ -495,87 +612,176 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
             colors={['#333', '#222']}
             style={styles.modalGradient}
           >
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.modalTitle}>
-                {editingItem ? 'Edit Cart Item' : 'Add Product to Cart'}
-              </Text>
-              <Text style={styles.modalSubtitle}>
-                Fill in the product details below
-              </Text>
-              {renderInputField(
-                'product_id',
-                'Product ID',
-                'Enter Product ID',
-                'numeric',
-              )}
-              {renderInputField(
-                'category_id',
-                'Category ID',
-                'Enter Category ID',
-                'numeric',
-              )}
-              {renderInputField(
-                'product_price',
-                'Product Price',
-                'Enter Price (e.g., 20.00)',
-                'decimal-pad',
-              )}
-              {renderInputField(
-                'quantity',
-                'Quantity',
-                'Enter Quantity',
-                'numeric',
-              )}
-              {renderInputField(
-                'total_amount',
-                'Total Amount (Auto-calculated)',
-                'Auto-calculated',
-                'numeric',
-                false,
-              )}
-              {renderInputField(
-                'user_id',
-                'User ID',
-                'Enter User ID',
-                'numeric',
-              )}
-              {renderInputField(
-                'tableno',
-                'Table Number',
-                'Enter Table Number',
-                'numeric',
-              )}
-              <View style={styles.modalButtonContainer}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>
+                  {editingItem ? 'Edit Cart Item' : 'Add Product to Cart'}
+                </Text>
                 <TouchableOpacity
-                  style={styles.cancelButton}
+                  style={styles.closeButton}
                   onPress={() => {
                     setShowAddModal(false);
                     setEditingItem(null);
                     resetForm();
+                    setSearchQuery('');
+                    setTempSelectedItems([]);
                   }}
-                  activeOpacity={0.8}
                 >
-                  <Text style={styles.cancelButtonText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.submitButton,
-                    isSubmitting && styles.disabledButton,
-                  ]}
-                  onPress={handleSubmit}
-                  activeOpacity={0.8}
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={styles.submitButtonText}>
-                      {editingItem ? 'Update Cart' : 'Add to Cart'}
-                    </Text>
-                  )}
+                  <Icon name="close" size={24} color="#fff" />
                 </TouchableOpacity>
               </View>
-            </ScrollView>
+              <Text style={styles.modalSubtitle}>
+                {editingItem ? 'Update the product details below' : 'Search and select a product to add'}
+              </Text>
+              {editingItem ? (
+                <>
+                  {renderInputField(
+                    'product_id',
+                    'Product ID',
+                    'Enter Product ID',
+                    'numeric',
+                  )}
+                  {renderInputField(
+                    'category_id',
+                    'Category ID',
+                    'Enter Category ID',
+                    'numeric',
+                  )}
+                  {renderInputField(
+                    'product_price',
+                    'Product Price',
+                    'Enter Price (e.g., 20.00)',
+                    'decimal-pad',
+                  )}
+                  {renderInputField(
+                    'quantity',
+                    'Quantity',
+                    'Enter Quantity',
+                    'numeric',
+                  )}
+                  {renderInputField(
+                    'total_amount',
+                    'Total Amount (Auto-calculated)',
+                    'Auto-calculated',
+                    'numeric',
+                    false,
+                  )}
+                  {renderInputField(
+                    'user_id',
+                    'User ID',
+                    'Enter User ID',
+                    'numeric',
+                  )}
+                  {renderInputField(
+                    'tableno',
+                    'Table Number',
+                    'Enter Table Number',
+                    'numeric',
+                  )}
+                  <View style={styles.modalButtonContainer}>
+                    <TouchableOpacity
+                      style={[
+                        styles.submitButton,
+                        isSubmitting && styles.disabledButton,
+                      ]}
+                      onPress={handleSubmit}
+                      activeOpacity={0.8}
+                      disabled={isSubmitting}
+                    >
+                      {isSubmitting ? (
+                        <ActivityIndicator color="#fff" size="small" />
+                      ) : (
+                        <Text style={styles.submitButtonText}>
+                          Update Cart
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <TextInput
+                    style={styles.textInput}
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                    placeholder="Search products..."
+                    placeholderTextColor="#888"
+                  />
+                  <FlatList
+                    data={filteredProducts}
+                    renderItem={renderProductItem}
+                    keyExtractor={item => item.id.toString()}
+                    style={styles.productList}
+                    ListEmptyComponent={
+                      <Text style={styles.emptyProductText}>No products found</Text>
+                    }
+                    showsVerticalScrollIndicator={false}
+                  />
+                  {tempSelectedItems.length > 0 && (
+                    <>
+                      <Text style={styles.previewTitle}>Selected Items Preview</Text>
+                      <FlatList
+                        data={tempSelectedItems}
+                        renderItem={renderTempItem}
+                        keyExtractor={item => item.id?.toString() || ''}
+                        style={styles.tempList}
+                        showsVerticalScrollIndicator={false}
+                      />
+                    </>
+                  )}
+                  <View style={styles.modalButtonContainer}>
+                    <TouchableOpacity
+                      style={styles.submitButton}
+                      onPress={handleConfirmAdd}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.submitButtonText}>Confirm Add</Text>
+                    </TouchableOpacity>
+                  </View>
+                </>
+              )}
+            </View>
+          </LinearGradient>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  const renderTableModal = () => (
+    <Modal
+      visible={showTableModal}
+      transparent={true}
+      animationType="fade"
+      onRequestClose={() => setShowTableModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContainerSmall}>
+          <LinearGradient colors={['#333', '#222']} style={styles.modalGradient}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Add New Table</Text>
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setShowTableModal(false)}
+              >
+                <Icon name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            <TextInput
+              style={styles.textInput}
+              value={newTableNo}
+              onChangeText={setNewTableNo}
+              placeholder="Enter Table Number"
+              placeholderTextColor="#888"
+              keyboardType="numeric"
+            />
+            <TouchableOpacity
+              //style={[styles.submitButton,{height:50}]}
+              style={{backgroundColor:'#4CAF50',padding:10,borderRadius:5}}
+              onPress={confirmAddTable}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.submitButtonText,{textAlign:'center'}]}>Add Table</Text>
+            </TouchableOpacity>
           </LinearGradient>
         </View>
       </View>
@@ -643,7 +849,7 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
           {item.item_image ? (
             <Image
               source={{
-                uri: `https://deepikagroups.com/Dosadharbar/api/v1/images/${item.item_image}`,
+                uri: `http://deepikagroups.com/Dosadharbar/api/v1/images/${item.item_image}`,
               }}
               style={styles.cartItemImage}
               resizeMode="cover"
@@ -710,44 +916,112 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
     </View>
   );
 
-  const renderHeader = () => (
-    <View style={styles.header}>
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={handleBackPress}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.backButtonText}>{'< Back'}</Text>
-      </TouchableOpacity>
-      <Text style={styles.title}>CART DETAILS</Text>
-      <Text style={styles.subtitle}>Manage your cart items</Text>
-      <View style={styles.statsContainer}>
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>{cartItems.length}</Text>
-          <Text style={styles.statLabel}>Items</Text>
+  const [userTables, setUserTables] = useState<string[]>([]);
+
+  const renderHeader = () => {
+    const uniqueTables = Array.from(new Set([
+      ...cartItems.map(item => item.tableno?.toString() || ''),
+      ...userTables,
+    ])).filter(Boolean);
+
+    return (
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={handleBackPress}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.backButtonText}>{'< Back'}</Text>
+        </TouchableOpacity>
+        <Text style={styles.title}>CART DETAILS</Text>
+        <Text style={styles.subtitle}>Manage your cart items</Text>
+        {/* Table Selection UI */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 15, flexWrap: 'wrap' }}>
+          <Text style={{ color: '#fff', fontSize: 16, marginRight: 10 }}>Choose Table:</Text>
+          {uniqueTables.length === 0 ? (
+            <Text style={{ color: '#888' }}>No Tables</Text>
+          ) : (
+            uniqueTables.map(table => (
+              <TouchableOpacity
+                key={table}
+                style={{
+                  backgroundColor: selectedTable === table ? '#4CAF50' : '#333',
+                  paddingHorizontal: 15,
+                  paddingVertical: 8,
+                  borderRadius: 20,
+                  marginRight: 8,
+                  marginBottom: 8,
+                  borderWidth: selectedTable === table ? 2 : 1,
+                  borderColor: selectedTable === table ? '#4CAF50' : '#444',
+                }}
+                onPress={() => setSelectedTable(table)}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>{table}</Text>
+              </TouchableOpacity>
+            ))
+          )}
+          <TouchableOpacity
+            style={{
+              backgroundColor: '#4CAF50',
+              paddingHorizontal: 15,
+              paddingVertical: 8,
+              borderRadius: 20,
+              marginRight: 8,
+              marginBottom: 8,
+            }}
+            onPress={handleAddNewTable}
+          >
+            <Text style={{ color: '#fff', fontWeight: 'bold' }}>+</Text>
+          </TouchableOpacity>
         </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>₹{calculateCartTotal()}</Text>
-          <Text style={styles.statLabel}>Total</Text>
+        <View style={styles.statsContainer}>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>{filteredCartItems?.length}</Text>
+            <Text style={styles.statLabel}>Items</Text>
+          </View>
+          <View style={styles.statBox}>
+            <Text style={styles.statValue}>₹{filteredCartItems?.reduce((sum, item) => sum + (parseFloat(item.total_amount as string) || 0), 0).toFixed(2)}</Text>
+            <Text style={styles.statLabel}>Total</Text>
+          </View>
         </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={handleAddProduct}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.addButtonText}>+ Add Product</Text>
+          </TouchableOpacity>
+          {selectedTable && (
+            <TouchableOpacity
+              style={styles.clearButton}
+              onPress={handleClearCart}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.clearButtonText}>Clear Cart</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <TouchableOpacity
+          style={styles.printAllButton}
+          onPress={handlePrintAllBill}
+          activeOpacity={0.8}
+          disabled={filteredCartItems?.length === 0}
+        >
+          <Text style={styles.printAllButtonText}>Print Bill for This Table</Text>
+        </TouchableOpacity>
+        {/* {selectedTable && (
+          <TouchableOpacity
+            style={styles.clearButton}
+            onPress={handleClearCart}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.clearButtonText}>Clear Cart</Text>
+          </TouchableOpacity>
+        )} */}
       </View>
-      <TouchableOpacity
-        style={styles.addButton}
-        onPress={handleAddProduct}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.addButtonText}>+ Add Product</Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={styles.printAllButton}
-        onPress={handlePrintAllBill}
-        activeOpacity={0.8}
-        disabled={cartItems.length === 0}
-      >
-        <Text style={styles.printAllButtonText}>Print Bill for All Items</Text>
-      </TouchableOpacity>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -762,29 +1036,42 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
     );
   }
 
+  const filteredCartItems = selectedTable
+    ? cartItems.filter(item => item.tableno?.toString() === selectedTable)
+    : [];
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
       {renderAddModal()}
-      <FlatList
-        data={cartItems}
-        renderItem={renderCartItem}
-        keyExtractor={(item, index) => `cart-item-${item.product_id}-${index}`}
-        ListHeaderComponent={renderHeader}
-        ListEmptyComponent={renderEmptyComponent}
-        contentContainerStyle={styles.listContainer}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            colors={['#fff']}
-            tintColor="#fff"
-            title="Pull to refresh"
-            titleColor="#fff"
-          />
-        }
-      />
+      {renderTableModal()}
+      {/* Only show cart if a table is selected */}
+      {selectedTable ? (
+        <FlatList
+          data={filteredCartItems}
+          renderItem={renderCartItem}
+          keyExtractor={(item, index) => `cart-item-${item.product_id}-${index}`}
+          ListHeaderComponent={renderHeader}
+          ListEmptyComponent={renderEmptyComponent}
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#fff']}
+              tintColor="#fff"
+              title="Pull to refresh"
+              titleColor="#fff"
+            />
+          }
+        />
+      ) : (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          {renderHeader()}
+          <Text style={{ color: '#888', fontSize: 18, marginTop: 40 }}>Please select a table to view its cart.</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -872,6 +1159,18 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   printAllButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  clearButton: {
+    backgroundColor: '#F44336',
+    paddingHorizontal: 25,
+    paddingVertical: 12,
+    borderRadius: 25,
+    marginTop: 0,
+  },
+  clearButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
@@ -1053,17 +1352,35 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     overflow: 'hidden',
   },
+  modalContainerSmall: {
+    width: width * 0.7,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
   modalGradient: {
     padding: 25,
     borderWidth: 1,
     borderColor: '#444',
   },
+  modalContent: {
+    flexGrow: 1,
+    maxHeight: '100%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  closeButton: {
+    padding: 5,
+  },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
     color: '#fff',
+    flex: 1,
     textAlign: 'center',
-    marginBottom: 10,
   },
   modalSubtitle: {
     fontSize: 14,
@@ -1089,6 +1406,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     color: '#fff',
     fontSize: 16,
+    marginBottom: 20,
   },
   disabledInput: {
     backgroundColor: '#333',
@@ -1106,29 +1424,16 @@ const styles = StyleSheet.create({
   },
   modalButtonContainer: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     marginTop: 20,
   },
-  cancelButton: {
-    flex: 0.45,
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#666',
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  cancelButtonText: {
-    color: '#888',
-    fontSize: 16,
-    fontWeight: '500',
-  },
   submitButton: {
-    flex: 0.45,
     backgroundColor: '#4CAF50',
+    paddingHorizontal: 25,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
+    flex: 1,
   },
   submitButtonText: {
     color: '#fff',
@@ -1137,6 +1442,83 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     backgroundColor: '#666',
+  },
+  productList: {
+    maxHeight: 200,
+    marginBottom: 20,
+  },
+  productItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#444',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#555',
+  },
+  productImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 10,
+    marginRight: 10,
+  },
+  productImagePlaceholder: {
+    width: 50,
+    height: 50,
+    borderRadius: 10,
+    backgroundColor: '#333',
+    marginRight: 10,
+  },
+  productInfo: {
+    flex: 1,
+  },
+  productName: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  productPrice: {
+    color: '#4CAF50',
+    fontSize: 14,
+  },
+  emptyProductText: {
+    color: '#888',
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  previewTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  tempList: {
+    maxHeight: 200,
+    marginBottom: 20,
+  },
+  tempItem: {
+    backgroundColor: '#444',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#555',
+  },
+  tempItemName: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  tempItemPrice: {
+    color: '#4CAF50',
+    fontSize: 14,
+  },
+  tempItemButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 5,
   },
 });
 

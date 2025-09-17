@@ -55,10 +55,10 @@ const CategoriesScreen: React.FC<CategoriesScreenProps> = ({ navigation }) => {
   });
   const [formLoading, setFormLoading] = useState<boolean>(false);
   const [imageBaseUrl, setImageBaseUrl] = useState<string>(
-    'https://deepikagroups.com/Dosadharbar/uploads/category/',
+    'http://unitech.agency/Dosadharbar/uploads/category/',
   );
 
-  const API_URL = 'https://deepikagroups.com/Dosadharbar/api/v1/getAllCategory';
+  const API_URL = 'http://unitech.agency/Dosadharbar/api/v1/getAllCategory';
 
   useEffect(() => {
     fetchCategories();
@@ -73,7 +73,6 @@ const CategoriesScreen: React.FC<CategoriesScreenProps> = ({ navigation }) => {
           'Content-Type': 'application/json',
         },
       });
-
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -81,7 +80,6 @@ const CategoriesScreen: React.FC<CategoriesScreenProps> = ({ navigation }) => {
       const data = await response.json();
       if (data['image_link']) {
         setImageBaseUrl(data['image_link']);
-        console.log('Image Base URL:', data['image_link']);
       }
       const activeCategories = data['Category'].filter(
         (category: CategoryType) => category.status === 'Active',
@@ -106,7 +104,6 @@ const CategoriesScreen: React.FC<CategoriesScreenProps> = ({ navigation }) => {
   };
 
   const handleCategoryPress = (category: CategoryType) => {
-    console.log('Category selected:', category);
     // navigation.navigate('Products', { categoryId: category.id, categoryName: category.name });
   };
 
@@ -177,14 +174,14 @@ const CategoriesScreen: React.FC<CategoriesScreenProps> = ({ navigation }) => {
         const filename = localUri.split('/').pop();
         let match = filename.match(/\.(\w+)$/);
         let type = match ? `image/${match[1].toLowerCase()}` : 'image';
-        formData.append('image', {
+        formData.append('category_image', {
           uri: localUri,
           name: filename,
           type,
         } as any);
       }
       const response = await fetch(
-        'https://deepikagroups.com/Dosadharbar/api/v1/add_Category',
+        'http://unitech.agency/Dosadharbar/api/v1/add_Category',
         {
           method: 'POST',
           headers: {
@@ -193,7 +190,6 @@ const CategoriesScreen: React.FC<CategoriesScreenProps> = ({ navigation }) => {
           body: formData,
         },
       );
-      console.log('Response:', response);
       if (!response.ok) throw new Error('Failed to save category');
       Alert.alert(
         'Success',
@@ -224,7 +220,7 @@ const CategoriesScreen: React.FC<CategoriesScreenProps> = ({ navigation }) => {
             try {
               setLoading(true);
               const response = await fetch(
-                `https://deepikagroups.com/Dosadharbar/api/v1/delete_Category/${id}`,
+                `http://unitech.agency/Dosadharbar/api/v1/delete_Category/${id}`,
                 { method: 'GET' },
               );
               if (!response.ok) throw new Error('Failed to delete category');

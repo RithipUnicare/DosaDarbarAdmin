@@ -61,7 +61,7 @@ const GetProductsScreen: React.FC<GetProductsScreenProps> = ({
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [categoryName, setCategoryName] = useState<string>('');
   const [imageBaseUrl, setImageBaseUrl] = useState<string>(
-    'https://deepikagroups.com/Dosadharbar/uploads/product/',
+    'http://unitech.agency/Dosadharbar/uploads/product/',
   );
   const [showModal, setShowModal] = useState<boolean>(false);
   const [isEditing, setIsEditing] = useState<boolean>(false);
@@ -77,7 +77,7 @@ const GetProductsScreen: React.FC<GetProductsScreenProps> = ({
   const [formLoading, setFormLoading] = useState<boolean>(false);
 
   const API_BASE_URL =
-    'https://deepikagroups.com/Dosadharbar/api/v1/get_AllproductDetails';
+    'http://unitech.agency/Dosadharbar/api/v1/get_AllproductDetails';
 
   useEffect(() => {
     fetchProducts();
@@ -87,7 +87,6 @@ const GetProductsScreen: React.FC<GetProductsScreenProps> = ({
     try {
       setLoading(true);
       const apiUrl = API_BASE_URL;
-      console.log(apiUrl);
       const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
@@ -102,7 +101,6 @@ const GetProductsScreen: React.FC<GetProductsScreenProps> = ({
       const Data = await response.json();
       if (Data['image_link']) {
         setImageBaseUrl(Data['image_link']);
-        console.log('Image Base URL:', Data['image_link']);
       }
       const data = Data['Item'];
 
@@ -133,7 +131,6 @@ const GetProductsScreen: React.FC<GetProductsScreenProps> = ({
   };
 
   const handleProductPress = (product: ProductType) => {
-    console.log('Product selected:', product);
     // Handle product selection - add to cart, show details, etc.
   };
 
@@ -228,14 +225,14 @@ const GetProductsScreen: React.FC<GetProductsScreenProps> = ({
         const filename = localUri.split('/').pop();
         let match = filename.match(/\.(\w+)$/);
         let type = match ? `image/${match[1].toLowerCase()}` : 'image';
-        formData.append('image', {
+        formData.append('item_image', {
           uri: localUri,
           name: filename,
           type,
         } as any);
       }
       const response = await fetch(
-        'https://deepikagroups.com/Dosadharbar/api/v1/add_Products',
+        'http://unitech.agency/Dosadharbar/api/v1/add_Products',
         {
           method: 'POST',
           headers: {
@@ -274,7 +271,7 @@ const GetProductsScreen: React.FC<GetProductsScreenProps> = ({
             try {
               setLoading(true);
               const response = await fetch(
-                `https://deepikagroups.com/Dosadharbar/api/v1/delete_Product/${id}`,
+                `http://unitech.agency/Dosadharbar/api/v1/delete_Product/${id}`,
                 { method: 'GET' },
               );
               if (!response.ok) throw new Error('Failed to delete product');
@@ -344,7 +341,7 @@ const GetProductsScreen: React.FC<GetProductsScreenProps> = ({
               console.log(
                 'Error loading image:',
                 item.product_image,
-                `${imageBaseUrl}${item.product_image || 'default.jpg'}`,
+                `${imageBaseUrl}${item.item_image || 'default.jpg'}`,
               )
             }
           />

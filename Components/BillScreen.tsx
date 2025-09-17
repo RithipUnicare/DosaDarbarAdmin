@@ -111,7 +111,7 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
         await scanDevices();
       }
     } catch (error) {
-      console.error('Error checking Bluetooth:', error);
+      //console.error('Error checking Bluetooth:', error);
       Alert.alert('Error', 'Failed to check Bluetooth status. Please ensure Bluetooth is enabled.');
     }
   };
@@ -147,7 +147,7 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
         );
       }
     } catch (error) {
-      console.error('Error scanning devices:', error);
+      //console.error('Error scanning devices:', error);
       Alert.alert('Scan Error', 'Failed to scan for devices. Ensure Bluetooth is enabled and permissions are granted.');
     } finally {
       setIsScanning(false);
@@ -169,12 +169,17 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
 
       console.log('Attempting to connect to:', macAddress);
       
-      await BLEPrinter.connectPrinter(macAddress);
-      setIsConnected(true);
+      console.log();
+      await BLEPrinter.connectPrinter(macAddress).then(() => {
+        setIsConnected(true);
+      }).catch((error) => {
+        console.error('Connection error:', error);
+        setIsConnected(false);
+      });
 
-      Alert.alert('Success', `Connected to printer: ${device.device_name || 'Unnamed Printer'}`);
+      //Alert.alert('Success', `Connected to printer: ${device.device_name || 'Unnamed Printer'}`);
     } catch (error: any) {
-      console.error('Connection error:', error);
+      //console.error('Connection error:', error);
       setIsConnected(false);
       
       if (error.message?.includes('pairing')) {
@@ -225,8 +230,8 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
           const srNo = `${(index + 1).toString().padStart(2, '0')}.`;
           const itemName = (item.name || 'N/A').substring(0, 12); 
           const quantity = (item.quantity || '0').toString().padStart(1, ' ');
-          const price = parseFloat(item.product_price || 0).toFixed(2);
-          const total = parseFloat(item.total_amount || 0).toFixed(2);
+          const price = parseFloat(String(item.product_price ?? 0)).toFixed(2);
+          const total = parseFloat(String(item.total_amount ?? 0)).toFixed(2);
 
 
           let itemLine = `<L>${srNo} ${itemName}</L>\n`;
@@ -284,7 +289,7 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
 
       Alert.alert('Success', 'Bill printed successfully!');
     } catch (error: any) {
-      console.error('Print error:', error);
+      //console.error('Print error:', error);
       
       if (error.message?.includes('pairing')) {
         Alert.alert(
@@ -320,7 +325,7 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
       setShowDeviceModal(false);
       Alert.alert('Disconnected', 'Printer has been disconnected.');
     } catch (error) {
-      console.error('Disconnect error:', error);
+      //console.error('Disconnect error:', error);
       Alert.alert('Error', 'Failed to disconnect printer.');
     }
   };
@@ -427,7 +432,7 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
           {item.item_image ? (
             <Image
               source={{
-                uri: `https://deepikagroups.com/Dosadharbar/api/v1/images/${item.item_image}`,
+                uri: `http://deepikagroups.com/Dosadharbar/api/v1/images/${item.item_image}`,
               }}
               style={styles.cartItemImage}
               resizeMode="cover"
