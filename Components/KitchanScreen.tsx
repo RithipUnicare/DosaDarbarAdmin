@@ -1,22 +1,20 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import type { RootStackParamList } from '../AppNav';
 import type { StackScreenProps } from '@react-navigation/stack';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   TouchableOpacity,
   SafeAreaView,
   StatusBar,
   ActivityIndicator,
-  Image,
   Alert,
   PermissionsAndroid,
   Platform,
   Modal,
-  FlatList,
+  ScrollView,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { Dimensions, Linking } from 'react-native';
@@ -31,7 +29,7 @@ import dayjs from 'dayjs';
 
 const { width } = Dimensions.get('window');
 
-interface CartItemType {
+export interface CartItemType {
   id?: string | number;
   cart_id?: string | number;
   product_id: string | number;
@@ -46,30 +44,19 @@ interface CartItemType {
   served?: boolean;
 }
 
-export interface ConsolidatedBill {
+export interface KitchenOrder {
   items: CartItemType[];
-  totalAmount: string;
-  userId: string;
   tableNo: string;
+  userId: string;
 }
 
-interface OrderType {
-  items: CartItemType[];
-  totalAmount: string;
-  userId: string;
-  tableNo: string;
-  timestamp: string;
-}
+type KitchenScreenProps = StackScreenProps<RootStackParamList, 'KitchenScreen'>;
 
-type BillScreenProps = StackScreenProps<RootStackParamList, 'BillScreen'>;
-
-const ORDER_STORAGE_KEY = 'orderHistory';
-const CART_STORAGE_KEY = 'cartItems';
-const IMAGE_BASE_URL = 'http://unitech.agency/Dosadharbar/api/v1/images/';
 const DEFAULT_PRINTER_KEY = 'defaultPrinter';
 
-const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
-  const { consolidatedBill } = route.params;
+const KitchenScreen: React.FC<KitchenScreenProps> = ({ route, navigation }) => {
+  const { kitchenOrder } = route.params as { kitchenOrder: KitchenOrder };
+  const [items, setItems] = useState<CartItemType[]>(kitchenOrder.items.map(item => ({ ...item, served: item.served ?? false })));
   const [isPrinting, setIsPrinting] = useState(false);
   const [bluetoothEnabled, setBluetoothEnabled] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -88,16 +75,6 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
     const storedMac = await AsyncStorage.getItem(DEFAULT_PRINTER_KEY);
     if (storedMac) {
       setDefaultPrinterMac(storedMac);
-    }
-  };
-
-  const setAsDefaultPrinter = async () => {
-    if (selectedDevice && selectedDevice.inner_mac_address) {
-      await AsyncStorage.setItem(DEFAULT_PRINTER_KEY, selectedDevice.inner_mac_address);
-      setDefaultPrinterMac(selectedDevice.inner_mac_address);
-      Alert.alert('Success', 'Printer set as default.');
-    } else {
-      Alert.alert('Error', 'No printer selected.');
     }
   };
 
@@ -157,7 +134,7 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
       setIsConnected(true);
       Alert.alert('Success', 'Connected to default printer.');
     } catch (error) {
-      //console.error('Default printer connection error:', error);
+      console.error('Default printer connection error:', error);
       Alert.alert('Error', 'Failed to connect to default printer. Scanning for devices...');
       await scanDevices();
     }
@@ -221,106 +198,6 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
     }
   };
 
-  const saveOrderToHistory = async () => {
-    try {
-      const stored = await AsyncStorage.getItem(ORDER_STORAGE_KEY);
-      const orderHistory: OrderType[] = stored ? JSON.parse(stored) : [];
-      const newOrder: OrderType = {
-        ...consolidatedBill,
-        timestamp: dayjs().format(),
-      };
-      orderHistory.push(newOrder);
-      await AsyncStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(orderHistory));
-    } catch (error) {
-      //console.error('Failed to save order to history:', error);
-    }
-  };
-
-  const handlePrintBill = async () => {
-    if (Platform.OS === 'ios') {
-      Alert.alert('Not Supported', 'Bluetooth printing requires additional iOS setup with this library.');
-      return;
-    }
-    if (!bluetoothEnabled) {
-      Alert.alert('Bluetooth Disabled', 'Please enable Bluetooth first.');
-      return;
-    }
-    if (!isConnected) {
-      Alert.alert('Not Connected', 'Please select and connect to a printer first.');
-      return;
-    }
-    if (!consolidatedBill?.items?.length) {
-      Alert.alert('No Items', 'No items available to print.');
-      return;
-    }
-
-    setIsPrinting(true);
-    try {
-      const totalQuantity = consolidatedBill?.items?.reduce((sum, item) => sum + (parseInt(item.quantity as string) || 0), 0);
-
-      const itemsText = consolidatedBill.items
-        .map((item, index) => {
-          const srNo = `${(index + 1).toString().padStart(2, '0')}.`;
-          const itemName = (item.name || 'N/A').substring(0, 12).padEnd(12, ' ');
-          const quantity = (item.quantity || '0').toString().padStart(1, ' ');
-          const price = parseFloat(String(item.product_price ?? 0)).toFixed(2);
-          const total = parseFloat(String(item.total_amount ?? 0)).toFixed(2);
-
-          let itemLine = `<L>${srNo} ${itemName}</L>\n`;
-          const detailLine = `${quantity}x${price} = ${total}`;
-          itemLine += `<R>${detailLine}</R>\n`;
-
-          return itemLine;
-        })
-        .join('');
-
-      const billNo = Math.floor(Math.random() * 10000);
-      const printText = `
-<C>============================</C>
-<C>DOSA DHARBHAR</C>
-<C>============================</C>
-<C>Bill No: ${billNo}</C>
-<L>Date: ${dayjs().format('YYYY-MM-DD HH:mm:ss')}</L>
-<L>Table: ${consolidatedBill.tableNo}</L>
-<L>User ID: ${consolidatedBill.userId}</L>
-<C>============================</C>
-<L>Item                Qty  Total</L>
-<C>----------------------------</C>
-${itemsText}
-<C>============================</C>
-<L>Total Quantity: ${totalQuantity}</L>
-<L>Total Amount: ₹${consolidatedBill.totalAmount}</L>
-<C>============================</C>
-<C>Thank you! Visit Again!</C>
-<C>============================</C>
-\n\n\n
-      `;
-
-      await BLEPrinter.printText(printText);
-      await saveOrderToHistory();
-      
-      // Clear the cart after successful print
-      try {
-        await AsyncStorage.removeItem(CART_STORAGE_KEY);
-      } catch (error) {
-        console.error('Error clearing cart:', error);
-      }
-      Alert.alert('Success', 'Bill printed successfully!');
-      // Clear cart for this table after printing
-      const storedCart = await AsyncStorage.getItem(CART_STORAGE_KEY);
-      let cartItems: CartItemType[] = storedCart ? JSON.parse(storedCart) : [];
-      cartItems = cartItems.filter(item => item.tableno !== consolidatedBill.tableNo);
-      await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
-      
-      navigation.goBack();
-    } catch (error) {
-      //console.error('Printing error:', error);
-      Alert.alert('Error', 'Failed to print bill. Please try again.');
-    } finally {
-      setIsPrinting(false);
-    }
-  };
-
   const handleDisconnect = async () => {
     try {
       await BLEPrinter.closeConn();
@@ -337,6 +214,73 @@ ${itemsText}
       Linking.sendIntent('android.settings.BLUETOOTH_SETTINGS');
     } else {
       Linking.openSettings();
+    }
+  };
+
+  const handleServeItem = (index: number) => {
+    const updatedItems = [...items];
+    updatedItems[index].served = true;
+    setItems(updatedItems);
+  };
+
+  const handlePrintKitchenOrder = async () => {
+    if (Platform.OS === 'ios') {
+      Alert.alert('Not Supported', 'Bluetooth printing requires additional iOS setup with this library.');
+      return;
+    }
+    if (!bluetoothEnabled) {
+      Alert.alert('Bluetooth Disabled', 'Please enable Bluetooth first.');
+      return;
+    }
+    if (!isConnected) {
+      Alert.alert('Not Connected', 'Please select and connect to a printer first.');
+      return;
+    }
+    if (!items.length) {
+      Alert.alert('No Items', 'No items available to print.');
+      return;
+    }
+
+    setIsPrinting(true);
+    try {
+      const itemsText = items
+        .map((item, index) => {
+          const srNo = `${(index + 1).toString().padStart(2, '0')}.`;
+          const itemName = (item.name || 'N/A').substring(0, 12).padEnd(12, ' ');
+          const quantity = (item.quantity || '0').toString().padStart(1, ' ');
+
+          let itemLine = `<L>${srNo} ${itemName}</L>\n`;
+          const detailLine = `Qty: ${quantity}`;
+          itemLine += `<R>${detailLine}</R>\n`;
+
+          return itemLine;
+        })
+        .join('');
+
+      const printText = `
+<C>============================</C>
+<C>KITCHEN ORDER</C>
+<C>============================</C>
+<L>Date: ${dayjs().format('YYYY-MM-DD HH:mm:ss')}</L>
+<L>Table: ${kitchenOrder.tableNo}</L>
+<L>User ID: ${kitchenOrder.userId}</L>
+<C>============================</C>
+<L>Item                Quantity</L>
+<C>----------------------------</C>
+${itemsText}
+<C>============================</C>
+<C>Prepare Order!</C>
+<C>============================</C>
+\n\n\n
+      `;
+
+      await BLEPrinter.printText(printText);
+      Alert.alert('Success', 'Kitchen order printed successfully!');
+    } catch (error) {
+      console.error('Printing error:', error);
+      Alert.alert('Error', 'Failed to print kitchen order. Please try again.');
+    } finally {
+      setIsPrinting(false);
     }
   };
 
@@ -404,6 +348,22 @@ ${itemsText}
     </Modal>
   );
 
+  const renderItem = ({ item, index }: { item: CartItemType; index: number }) => (
+    <View style={styles.itemCard}>
+      <LinearGradient colors={['#333', '#222']} style={styles.cardGradient}>
+        <Text style={styles.itemName}>{item.name || 'Unknown'}</Text>
+        <Text style={styles.itemQuantity}>Quantity: {item.quantity}</Text>
+        <TouchableOpacity
+          style={[styles.serveButton, item.served && styles.servedButton]}
+          onPress={() => !item.served && handleServeItem(index)}
+          disabled={item.served}
+        >
+          <Text style={styles.serveButtonText}>{item.served ? 'Served' : 'Serve'}</Text>
+        </TouchableOpacity>
+      </LinearGradient>
+    </View>
+  );
+
   const renderHeader = () => (
     <View style={styles.header}>
       <TouchableOpacity
@@ -412,9 +372,9 @@ ${itemsText}
       >
         <Text style={styles.backButtonText}>{'< Back'}</Text>
       </TouchableOpacity>
-      <Text style={styles.title}>Bill Details</Text>
+      <Text style={styles.title}>Kitchen Orders</Text>
       <Text style={styles.subtitle}>
-        Table No: {consolidatedBill.tableNo} | User ID: {consolidatedBill.userId}
+        Table No: {kitchenOrder.tableNo} | User ID: {kitchenOrder.userId}
       </Text>
       <View style={styles.statusRow}>
         <View
@@ -438,15 +398,66 @@ ${itemsText}
           </Text>
         </View>
       </View>
-      <View style={styles.statsContainer}>
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>{consolidatedBill.items.length}</Text>
-          <Text style={styles.statLabel}>Items</Text>
-        </View>
-        <View style={styles.statBox}>
-          <Text style={styles.statValue}>₹{consolidatedBill.totalAmount}</Text>
-          <Text style={styles.statLabel}>Total</Text>
-        </View>
+    </View>
+  );
+
+  const renderControlButtons = () => (
+    <View style={styles.bottomContainer}>
+      {/* Top Row */}
+      <View style={styles.buttonRow}>
+        {/* Print Button */}
+        <TouchableOpacity
+          style={[styles.primaryButton, isPrinting && styles.disabledButton]}
+          onPress={handlePrintKitchenOrder}
+          disabled={isPrinting}
+        >
+          <Text style={styles.primaryButtonText}>
+            {isPrinting ? 'Printing...' : 'Print'}
+          </Text>
+        </TouchableOpacity>
+
+        {/* Bluetooth Toggle/Scan */}
+        {!bluetoothEnabled ? (
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={checkBluetoothAndPermissions}
+          >
+            <Text style={styles.secondaryButtonText}>Enable BT</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={styles.secondaryButton}
+            onPress={scanDevices}
+            disabled={isScanning}
+          >
+            {isScanning ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Text style={styles.secondaryButtonText}>Scan</Text>
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Bottom Row */}
+      <View style={styles.buttonRow}>
+        {/* Disconnect Button */}
+        {isConnected && (
+          <TouchableOpacity
+            style={[styles.secondaryButton, styles.disconnectButton]}
+            onPress={handleDisconnect}
+          >
+            <Text style={styles.secondaryButtonText}>Disconnect</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Settings Button */}
+        <TouchableOpacity
+          style={[styles.secondaryButton, styles.settingsButton]}
+          onPress={openBluetoothSettings}
+        >
+          <Text style={styles.secondaryButtonText}>Settings</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -455,126 +466,17 @@ ${itemsText}
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
       {renderDeviceModal()}
-      <ScrollView contentContainerStyle={styles.billContainer}>
-        {renderHeader()}
-        {consolidatedBill?.items?.map((item: any, index: any) => (
-          <View key={index} style={styles.billCard}>
-            <LinearGradient colors={['#333', '#222']} style={styles.cardGradient}>
-              <View style={styles.cartItemImageRow}>
-                {item?.item_image ? (
-                  <Image
-                    source={{ uri: `${IMAGE_BASE_URL}${item?.item_image}` }}
-                    style={styles.cartItemImage}
-                  />
-                ) : (
-                  <View style={styles.cartItemImagePlaceholder} />
-                )}
-                <View style={styles.cartItemNameCol}>
-                  <Text style={styles.cartItemName}>{item?.name || 'Unknown'}</Text>
-                </View>
-              </View>
-              <View style={styles.cartItemContent}>
-                <View style={styles.cartItemRow}>
-                  <Text style={styles.cartItemLabel}>Product ID:</Text>
-                  <Text style={styles.cartItemValue}>{item?.product_id}</Text>
-                </View>
-                <View style={styles.cartItemRow}>
-                  <Text style={styles.cartItemLabel}>Category ID:</Text>
-                  <Text style={styles.cartItemValue}>{item?.category_id}</Text>
-                </View>
-                <View style={styles.cartItemRow}>
-                  <Text style={styles.cartItemLabel}>Quantity:</Text>
-                  <Text style={styles.cartItemValue}>{item?.quantity}</Text>
-                </View>
-                <View style={styles.cartItemRow}>
-                  <Text style={styles.cartItemLabel}>Price:</Text>
-                  <Text style={styles.cartItemPrice}>₹{item?.product_price}</Text>
-                </View>
-                <View style={styles.cartItemRow}>
-                  <Text style={styles.cartItemLabel}>Total:</Text>
-                  <Text style={styles.cartItemTotal}>₹{item?.total_amount}</Text>
-                </View>
-              </View>
-            </LinearGradient>
-          </View>
-        ))}
-        <View style={styles.totalContainer}>
-          <Text style={styles.totalLabel}>Total Amount</Text>
-          <Text style={styles.totalAmount}>₹{consolidatedBill.totalAmount}</Text>
-        </View>
-        
-        {/* Action Buttons Container */}
-        <View style={styles.actionButtonsContainer}>
-          {/* Top Row */}
-          <View style={styles.buttonRow}>
-            {/* Print Button */}
-            <TouchableOpacity
-              style={[styles.primaryButton, isPrinting && styles.disabledButton]}
-              onPress={handlePrintBill}
-              disabled={isPrinting}
-              accessibilityRole="button"
-              accessibilityLabel="Print bill"
-            >
-              <Text style={styles.primaryButtonText}>
-                {isPrinting ? 'Printing...' : 'Print'}
-              </Text>
-            </TouchableOpacity>
-
-            {/* Bluetooth Toggle/Scan */}
-            {!bluetoothEnabled ? (
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={checkBluetoothAndPermissions}
-                accessibilityRole="button"
-                accessibilityLabel="Enable Bluetooth"
-              >
-                <Text style={styles.secondaryButtonText}>Enable BT</Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={scanDevices}
-                disabled={isScanning}
-                accessibilityRole="button"
-                accessibilityLabel="Scan for printers"
-              >
-                {isScanning ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.secondaryButtonText}>Scan</Text>
-                )}
-              </TouchableOpacity>
-            )}
-          </View>
-
-          {/* Bottom Row */}
-          <View style={styles.buttonRow}>
-            {/* Set Default / Disconnect Button */}
-            {isConnected ? (
-              <TouchableOpacity
-                style={[styles.secondaryButton, styles.disconnectButton]}
-                onPress={handleDisconnect}
-                accessibilityRole="button"
-                accessibilityLabel="Disconnect printer"
-              >
-                <Text style={styles.secondaryButtonText}>Disconnect</Text>
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.placeholderButton} />
-            )}
-
-            {/* Settings Button */}
-            <TouchableOpacity
-              style={[styles.secondaryButton, styles.settingsButton]}
-              onPress={openBluetoothSettings}
-              accessibilityRole="button"
-              accessibilityLabel="Open Bluetooth settings"
-            >
-              <Text style={styles.secondaryButtonText}>Settings</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </ScrollView>
+      
+      <FlatList
+        data={items}
+        renderItem={renderItem}
+        keyExtractor={item => item.id?.toString() || `${item.product_id}-${item.tableno}`}
+        ListHeaderComponent={renderHeader}
+        contentContainerStyle={styles.listContainer}
+        showsVerticalScrollIndicator={false}
+      />
+      
+      {renderControlButtons()}
     </SafeAreaView>
   );
 };
@@ -584,18 +486,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  header: {
-    paddingTop: 21,
+  listContainer: {
+    paddingHorizontal: 20,
     paddingBottom: 20,
+  },
+  header: {
+    paddingTop: 25,
+    paddingBottom: 25,
     alignItems: 'center',
-    paddingHorizontal: 15,
+    paddingHorizontal: 5,
   },
   backButton: {
     alignSelf: 'flex-start',
-    paddingVertical: 10,
-    paddingHorizontal: 5,
-    marginBottom: 20,
-    marginTop: 20,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    marginBottom: 15,
+    marginTop: 15,
   },
   backButtonText: {
     color: '#fff',
@@ -607,157 +513,89 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#fff',
     letterSpacing: 1,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   subtitle: {
     fontSize: 16,
     color: '#888',
-    marginBottom: 20,
+    marginBottom: 25,
+    textAlign: 'center',
   },
   statusRow: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'space-between',
     width: '100%',
-    marginBottom: 20,
+    marginBottom: 10,
+    paddingHorizontal: 10,
   },
   statusIndicator: {
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: 20,
-    minWidth: 120,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 25,
+    flex: 0.48,
     alignItems: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
   statusText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: 'bold',
   },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-    width: '100%',
-  },
-  statBox: {
-    backgroundColor: '#333',
-    padding: 15,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: '#444',
-    flex: 0.45,
-    alignItems: 'center',
-  },
-  statValue: {
-    color: '#4CAF50',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 5,
-  },
-  statLabel: {
-    color: '#888',
-    fontSize: 12,
-  },
-  billContainer: {
-    paddingHorizontal: 15,
-    paddingBottom: 20,
-    flexGrow: 1,
-  },
-  billCard: {
-    marginBottom: 15,
+  itemCard: {
+    marginBottom: 18,
     borderRadius: 15,
     overflow: 'hidden',
-    elevation: 3,
+    elevation: 4,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
   cardGradient: {
-    padding: 15,
+    padding: 20,
     borderWidth: 1,
     borderColor: '#444',
   },
-  cartItemImageRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-    gap: 12,
-  },
-  cartItemImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 10,
-    backgroundColor: '#222',
-    borderWidth: 1,
-    borderColor: '#444',
-  },
-  cartItemImagePlaceholder: {
-    width: 60,
-    height: 60,
-    borderRadius: 10,
-    backgroundColor: '#333',
-    borderWidth: 1,
-    borderColor: '#444',
-  },
-  cartItemNameCol: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  cartItemName: {
+  itemName: {
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
-    letterSpacing: 0.5,
+    marginBottom: 8,
   },
-  cartItemContent: {
-    gap: 10,
-  },
-  cartItemRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  cartItemLabel: {
+  itemQuantity: {
     color: '#888',
-    fontSize: 14,
+    fontSize: 15,
+    marginBottom: 15,
   },
-  cartItemValue: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  cartItemPrice: {
-    color: '#4CAF50',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  cartItemTotal: {
-    color: '#4CAF50',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  totalContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  serveButton: {
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    borderRadius: 20,
     alignItems: 'center',
-    paddingVertical: 15,
-    borderTopWidth: 1,
-    borderTopColor: '#444',
-    marginTop: 10,
+    elevation: 2,
+    minWidth: 80,
+    alignSelf: 'flex-end',
   },
-  totalLabel: {
+  servedButton: {
+    backgroundColor: '#666',
+  },
+  serveButtonText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 12,
+    fontWeight: '600',
   },
-  totalAmount: {
-    color: '#4CAF50',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  actionButtonsContainer: {
-    marginTop: 20,
-    paddingHorizontal: 5,
+  bottomContainer: {
+    paddingHorizontal: 15,
+    paddingBottom: 15,
+    paddingTop: 10,
+    backgroundColor: '#111',
+    borderTopWidth: 1,
+    borderTopColor: '#333',
   },
   buttonRow: {
     flexDirection: 'row',
@@ -772,6 +610,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flex: 1,
     marginRight: 5,
+    elevation: 2,
     minHeight: 45,
     justifyContent: 'center',
   },
@@ -779,6 +618,9 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: '600',
+  },
+  disabledButton: {
+    opacity: 0.6,
   },
   secondaryButton: {
     backgroundColor: '#4CAF50',
@@ -791,49 +633,21 @@ const styles = StyleSheet.create({
     minHeight: 45,
     justifyContent: 'center',
   },
+  disconnectButton: {
+    backgroundColor: '#F44336',
+    marginRight: 5,
+  },
   secondaryButtonText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
   },
-  disconnectButton: {
-    backgroundColor: '#F44336',
-    marginRight: 5,
-  },
   settingsButton: {
     backgroundColor: '#555',
     marginLeft: 5,
     borderWidth: 1,
     borderColor: '#666',
-  },
-  placeholderButton: {
-    flex: 1,
-    marginRight: 5,
-    backgroundColor: 'transparent',
-  },
-  disabledButton: {
-    opacity: 0.6,
-    marginTop: 10,
-  },
-  disconnectButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  bluetoothSettingsButton: {
-    backgroundColor: '#888',
-    paddingHorizontal: 25,
-    paddingVertical: 12,
-    borderRadius: 25,
-    alignItems: 'center',
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  bluetoothSettingsButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
   modalOverlay: {
     flex: 1,
@@ -847,12 +661,16 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     maxHeight: '80%',
+    elevation: 5,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 15,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#444',
   },
   modalTitle: {
     fontSize: 20,
@@ -862,22 +680,29 @@ const styles = StyleSheet.create({
   modalClose: {
     fontSize: 16,
     color: '#888',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
   modalSubtitle: {
     fontSize: 14,
     color: '#888',
     marginBottom: 15,
+    textAlign: 'center',
   },
   deviceItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 15,
+    padding: 18,
     borderBottomWidth: 1,
     borderBottomColor: '#444',
+    borderRadius: 10,
+    marginBottom: 5,
   },
   printerDeviceItem: {
     backgroundColor: '#333',
+    borderWidth: 1,
+    borderColor: '#4CAF50',
   },
   deviceInfo: {
     flex: 1,
@@ -891,6 +716,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#4CAF50',
     marginTop: 5,
+    fontWeight: '600',
   },
   deviceAddress: {
     fontSize: 12,
@@ -901,6 +727,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#2196F3',
     fontWeight: 'bold',
+    paddingHorizontal: 15,
+    paddingVertical: 8,
+    backgroundColor: '#333',
+    borderRadius: 20,
   },
   modalButtons: {
     marginTop: 20,
@@ -908,9 +738,10 @@ const styles = StyleSheet.create({
   },
   rescanButton: {
     backgroundColor: '#4CAF50',
-    paddingHorizontal: 25,
-    paddingVertical: 12,
+    paddingHorizontal: 30,
+    paddingVertical: 15,
     borderRadius: 25,
+    elevation: 2,
   },
   rescanButtonText: {
     color: '#fff',
@@ -919,18 +750,21 @@ const styles = StyleSheet.create({
   },
   emptyContainer: {
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: 30,
+    paddingHorizontal: 20,
   },
   emptyText: {
     fontSize: 16,
     color: '#fff',
     marginBottom: 10,
+    fontWeight: '600',
   },
   emptySubtext: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#888',
     textAlign: 'center',
+    lineHeight: 18,
   },
 });
 
-export default BillScreen;
+export default KitchenScreen;

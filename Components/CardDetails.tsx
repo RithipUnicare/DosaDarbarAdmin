@@ -35,30 +35,7 @@ interface CartItemType {
   tableno: string | number;
   name?: string;
   item_image?: string;
-}
-
-interface ProductType {
-  id: string | number;
-  name: string;
-  category_id: string | number;
-  product_code: string | number;
-  prices: string | number;
-  status: string;
-  item_image?: string;
-}
-
-interface FormDataType {
-  product_id: string;
-  category_id: string;
-  product_price: string;
-  quantity: string;
-  total_amount: string;
-  user_id: string;
-  tableno: string;
-}
-
-interface FormErrorsType {
-  [key: string]: string | undefined | null;
+  served?: boolean; // Added to track served status
 }
 
 interface ConsolidatedBillType {
@@ -70,775 +47,419 @@ interface ConsolidatedBillType {
 
 interface CartDetailsScreenProps {
   navigation: any;
+  route: { params?: { user_id?: string; tableno?: string } };
 }
 
 const CART_STORAGE_KEY = 'cartItems';
+const GET_CART_API = 'http://unitech.agency/Dosadharbar/api/v1/get_cart_detailsAdmin';
+const IMAGE_BASE_URL = 'http://unitech.agency/Dosadharbar/api/v1/images/';
 
 const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
   navigation,
+  route,
 }) => {
+  const [groupedByTable, setGroupedByTable] = useState<{ [key: string]: CartItemType[] }>({});
+  const [sortedTableNumbers, setSortedTableNumbers] = useState<string[]>([]);
   const [cartItems, setCartItems] = useState<CartItemType[]>([]);
-  const [products, setProducts] = useState<ProductType[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
-  const [showAddModal, setShowAddModal] = useState<boolean>(false);
-  const [editingItem, setEditingItem] = useState<CartItemType | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [formData, setFormData] = useState<FormDataType>({
-    product_id: '',
-    category_id: '',
-    product_price: '',
-    quantity: '1',
-    total_amount: '',
-    user_id: '',
-    tableno: '',
-  });
-  const [formErrors, setFormErrors] = useState<FormErrorsType>({});
-  const [selectedTable, setSelectedTable] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [tempSelectedItems, setTempSelectedItems] = useState<CartItemType[]>([]);
   const [showTableModal, setShowTableModal] = useState<boolean>(false);
   const [newTableNo, setNewTableNo] = useState<string>('');
-
-  const GET_PRODUCT_API = 'http://unitech.agency/Dosadharbar/api/v1/get_AllproductDetails';
+  const [userId, setUserId] = useState<string>(route.params?.user_id || '999');
+  const [tableNo, setTableNo] = useState<string>('');//route.params?.tableno || 
 
   useEffect(() => {
-    const loadCart = async () => {
-      try {
-        const stored = await AsyncStorage.getItem(CART_STORAGE_KEY);
-        if (stored) {
-          setCartItems(JSON.parse(stored));
-        } else {
-          // Add dummy if no stored
-          const dummyItems: CartItemType[] = [
-            {
-              id: 'dummy1',
-              cart_id: 'dummy1',
-              product_id: '101',
-              category_id: '1',
-              product_price: '50.00',
-              quantity: '2',
-              total_amount: '100.00',
-              user_id: '999',
-              tableno: '5',
-              name: 'Masala Dosa',
-              item_image: '',
-            },
-            {
-              id: 'dummy2',
-              cart_id: 'dummy2',
-              product_id: '102',
-              category_id: '1',
-              product_price: '30.00',
-              quantity: '1',
-              total_amount: '30.00',
-              user_id: '999',
-              tableno: '5',
-              name: 'Idli Sambhar',
-              item_image: '',
-            },
-            {
-              id: 'dummy3',
-              cart_id: 'dummy3',
-              product_id: '103',
-              category_id: '2',
-              product_price: '40.00',
-              quantity: '3',
-              total_amount: '120.00',
-              user_id: '999',
-              tableno: '5',
-              name: 'Vada Pav',
-              item_image: '',
-            },
-            {
-              id: 'dummy4',
-              cart_id: 'dummy4',
-              product_id: '104',
-              category_id: '1',
-              product_price: '25.00',
-              quantity: '1',
-              total_amount: '25.00',
-              user_id: '999',
-              tableno: '5',
-              name: 'Filter Coffee',
-              item_image: '',
-            },
-          ];
-          setCartItems(dummyItems);
-        }
-      } catch (error) {
-        console.error('Failed to load cart from storage');
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadCartAndFetchOrders();
+    });
+    
+    // Initial load
+    loadCartAndFetchOrders();
+    
+    // Clean up the event listener
+    return unsubscribe;
+  }, [navigation, userId]);
+  useEffect(()=>{
+    if(tableNo){
+      loadCartAndFetchOrders();
+    }
+  },[tableNo])
+
+  const loadCartAndFetchOrders = async () => {
+    try {
+      setLoading(true);
+      // Load local cart
+      const stored = await AsyncStorage.getItem(CART_STORAGE_KEY);
+      let localItems: CartItemType[] = stored ? JSON.parse(stored) : [];
+      
+
+      // Fetch server orders
+      const response = await fetch(GET_CART_API);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
+      // const data = await response.json();
+      
+      // const serverItems: CartItemType[] = data?.Item?.filter((item: any) => item.tableno && item.quantity).map((item: any) => ({
+      //   id: item.id || `server_${item.id}`,
+      //   product_id: item.id,
+      //   category_id: item.category_id,
+      //   product_price: item.prices,
+      //   quantity: item.quantity,
+      //   total_amount: (parseFloat(item.prices) * parseInt(item.quantity)).toFixed(2),
+      //   user_id: userId,
+      //   tableno: item.tableno,
+      //   name: item.name,
+      //   item_image: item.item_image,
+      //   served: false,
+      // }));
+      
+      // Merge server items with local items, prioritizing server items
+      const mergedItems: CartItemType[] = [];//[...serverItems];
+      localItems?.forEach(localItem => {
+        const existing = mergedItems.find(
+          item => item.product_id === localItem.product_id && item.tableno === localItem.tableno
+        );
+        if (existing) {
+          // Update quantity and total if exists
+          const newQuantity = parseInt(existing.quantity as string) + parseInt(localItem.quantity as string);
+          existing.quantity = newQuantity;
+          existing.total_amount = (parseFloat(existing.product_price as string) * newQuantity).toFixed(2);
+        } else {
+          mergedItems.push(localItem);
+        }
+      });
+
+      // Group items by table number
+      const grouped: { [key: string]: CartItemType[] } = {};
+      mergedItems?.forEach(item => {
+        if (item.tableno) {
+          const table = item.tableno.toString();
+          if (!grouped[table]) {
+            grouped[table] = [];
+          }
+          grouped[table].push(item);
+        }
+      });
+
+      // Sort table numbers
+      const sorted = Object.keys(grouped).sort((a, b) => Number(a) - Number(b));
+
+      setCartItems(mergedItems);
+      setGroupedByTable(grouped);
+      setSortedTableNumbers(sorted);
+
+      // Set default table if none selected and tables exist
+      if (!tableNo && sorted?.length > 0) {
+        setTableNo(sorted[0]);
+      }
+
+      // Save merged items to AsyncStorage
+      await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(mergedItems));
+    } catch (error) {
+      console.error('Failed to load cart or orders:', error);
+      Alert.alert(
+        'Error',
+        'Failed to load cart or orders. Please check your internet connection.',
+        [{ text: 'OK' }],
+      );
+    } finally {
       setLoading(false);
-    };
-    loadCart();
-    fetchProducts();
-  }, []);
+    }
+  };
+
+  useEffect(() => {
+    // Show table modal if no tables exist
+    if (sortedTableNumbers.length === 0 && !tableNo && !showTableModal) {
+      setShowTableModal(true);
+    }
+  }, [sortedTableNumbers, tableNo, showTableModal]);
 
   useEffect(() => {
     const saveCart = async () => {
       try {
         await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
       } catch (error) {
-        console.error('Failed to save cart to storage');
+        console.error('Failed to save cart to storage:', error);
       }
     };
     saveCart();
   }, [cartItems]);
 
-  useEffect(() => {
-    calculateTotalAmount();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.product_price, formData.quantity]);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadCartAndFetchOrders();
+    setRefreshing(false);
+  };
 
-  const fetchProducts = async () => {
+  const updateCartQuantity = (item: CartItemType, newQuantity: number) => {
+    if (newQuantity < 1) return;
     try {
-      const response = await fetch(GET_PRODUCT_API);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      const parsedPrice = parseFloat(item.product_price as string);
+      if (isNaN(parsedPrice)) {
+        throw new Error('Invalid product price');
       }
-      const Data = await response.json();
-      const data = Data['Item'] || Data['data'] || [];
-      setProducts(Array.isArray(data) ? data : []);
-    } catch (error: any) {
-      Alert.alert(
-        'Error',
-        'Failed to load products. Please check your internet connection.',
-        [{ text: 'OK', style: 'default' }],
-      );
-    }
-  };
-
-  const calculateTotalAmount = () => {
-    const price = parseFloat(formData.product_price) || 0;
-    const quantity = parseInt(formData.quantity) || 0;
-    const total = (price * quantity).toFixed(2);
-    setFormData(prev => ({ ...prev, total_amount: total }));
-  };
-
-  const validateForm = () => {
-    const errors: FormErrorsType = {};
-    const requiredFields = [
-      { key: 'product_id', label: 'Product ID' },
-      { key: 'category_id', label: 'Category ID' },
-      { key: 'product_price', label: 'Product Price' },
-      { key: 'quantity', label: 'Quantity' },
-      { key: 'user_id', label: 'User ID' },
-      { key: 'tableno', label: 'Table Number' },
-    ];
-    requiredFields.forEach(({ key, label }) => {
-      if (
-        !formData[key as keyof FormDataType] ||
-        !formData[key as keyof FormDataType].toString().trim()
-      ) {
-        errors[key] = `${label} is required`;
-      }
-    });
-    if (formData.product_price && isNaN(parseFloat(formData.product_price))) {
-      errors.product_price = 'Please enter a valid price';
-    }
-    if (
-      formData.quantity &&
-      (isNaN(parseInt(formData.quantity)) || parseInt(formData.quantity) <= 0)
-    ) {
-      errors.quantity = 'Please enter a valid quantity (greater than 0)';
-    }
-    if (formData.product_price && parseFloat(formData.product_price) <= 0) {
-      errors.product_price = 'Price must be greater than 0';
-    }
-    setFormErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const updateCartQuantity = (
-    item: CartItemType,
-    newQuantity: number,
-  ) => {
-    if (newQuantity <= 0) return;
-    const updatedCartItems = cartItems.map(cartItem =>
-      cartItem.product_id === item.product_id &&
-      cartItem.user_id === item.user_id &&
-      cartItem.tableno === item.tableno
-        ? {
-            ...cartItem,
-            quantity: newQuantity,
-            total_amount: (
-              parseFloat(cartItem.product_price as string) * newQuantity
-            ).toFixed(2),
-          }
-        : cartItem,
-    );
-    setCartItems(updatedCartItems);
-  };
-
-  const addOrUpdateLocalCart = (productData: any, isEdit: boolean) => {
-    if (isEdit && editingItem) {
-      const updatedItems = cartItems.map(i =>
-        i.id === editingItem.id
+      const updatedCartItems = cartItems.map(cartItem =>
+        cartItem.product_id === item.product_id &&
+        cartItem.user_id === item.user_id &&
+        cartItem.tableno === item.tableno
           ? {
-              ...i,
-              product_id: productData.product_id,
-              category_id: productData.category_id,
-              product_price: productData.product_price,
-              quantity: productData.quantity,
-              total_amount: productData.total_amount,
-              user_id: productData.user_id,
-              tableno: productData.tableno,
+              ...cartItem,
+              quantity: newQuantity,
+              total_amount: (parsedPrice * newQuantity).toFixed(2),
             }
-          : i,
+          : cartItem
       );
-      setCartItems(updatedItems);
-    } else {
-      const newId = Date.now().toString();
-      const newItem: CartItemType = {
-        id: newId,
-        cart_id: newId,
-        ...productData,
-      };
-      setCartItems(prev => [...prev, newItem]);
+
+      // Update groupedByTable to reflect quantity changes
+      const grouped: { [key: string]: CartItemType[] } = {};
+      updatedCartItems.forEach(updatedItem => {
+        if (updatedItem.tableno) {
+          const table = updatedItem.tableno.toString();
+          if (!grouped[table]) {
+            grouped[table] = [];
+          }
+          grouped[table].push(updatedItem);
+        }
+      });
+
+      setCartItems(updatedCartItems);
+      setGroupedByTable(grouped);
+    } catch (error) {
+      console.error('Failed to update quantity:', error);
+      Alert.alert('Error', 'Unable to update quantity. Please try again.');
     }
-    resetForm();
-    setShowAddModal(false);
-    setEditingItem(null);
-    Alert.alert(
-      'Success',
-      isEdit ? 'Cart item updated successfully!' : 'Product added to cart successfully!',
-      [{ text: 'OK', style: 'default' }],
-    );
   };
 
-  const deleteCartItem = async (item: CartItemType) => {
+  const handleDeleteItem = (item: CartItemType) => {
     Alert.alert(
-      'Delete Cart Item',
-      'Are you sure you want to delete this cart item?',
+      'Delete Item',
+      'Are you sure you want to delete this item from the cart?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            setCartItems(prev => prev.filter(i => i.id !== item.id));
+            const updatedCartItems = cartItems.filter(
+              i => !(i.product_id === item.product_id && i.tableno === item.tableno)
+            );
+            // Update groupedByTable after deletion
+            const grouped: { [key: string]: CartItemType[] } = {};
+            updatedCartItems.forEach(updatedItem => {
+              if (updatedItem.tableno) {
+                const table = updatedItem.tableno.toString();
+                if (!grouped[table]) {
+                  grouped[table] = [];
+                }
+                grouped[table].push(updatedItem);
+              }
+            });
+            const sorted = Object.keys(grouped).sort((a, b) => Number(a) - Number(b));
+            setCartItems(updatedCartItems);
+            setGroupedByTable(grouped);
+            setSortedTableNumbers(sorted);
+            // If current table has no items, select first available table or show modal
+            if (!grouped[tableNo] && sorted.length > 0) {
+              setTableNo(sorted[0]);
+            } else if (!grouped[tableNo] && sorted.length === 0) {
+              setTableNo('');
+              setShowTableModal(true);
+            }
           },
         },
-      ],
+      ]
     );
   };
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchProducts();
-    setRefreshing(false);
-  };
-
-  const handleAddProduct = () => {
-    if (!selectedTable) {
-      Alert.alert('Select Table', 'Please select or add a table before adding a product.');
+  const handlePrintBill = () => {
+    if (!tableNo) {
+      Alert.alert('Error', 'Please select a table number first.', [{ text: 'OK' }]);
       return;
     }
-    setTempSelectedItems([]);
-    setEditingItem(null);
-    setSearchQuery('');
-    setShowAddModal(true);
-  };
-
-  const handleEditProduct = (item: CartItemType) => {
-    setFormData({
-      product_id: item.product_id?.toString() || '',
-      category_id: item.category_id?.toString() || '',
-      product_price: item.product_price?.toString() || '',
-      quantity: item.quantity?.toString() || '1',
-      total_amount: item.total_amount?.toString() || '',
-      user_id: item.user_id?.toString() || '',
-      tableno: item.tableno?.toString() || '',
-    });
-    setEditingItem(item);
-    setFormErrors({});
-    setShowAddModal(true);
-  };
-
-  const resetForm = () => {
-    setFormData({
-      product_id: '',
-      category_id: '',
-      product_price: '',
-      quantity: '1',
-      total_amount: '',
-      user_id: '',
-      tableno: '',
-    });
-    setFormErrors({});
-  };
-
-  const handleSubmit = () => {
-    if (!validateForm()) {
-      return;
-    }
-    const productData = {
-      product_id: parseInt(formData.product_id),
-      category_id: parseInt(formData.category_id),
-      product_price: parseFloat(formData.product_price).toFixed(2),
-      quantity: parseInt(formData.quantity),
-      total_amount: parseFloat(formData.total_amount).toFixed(2),
-      user_id: parseInt(formData.user_id),
-      tableno: parseInt(formData.tableno),
-    };
-    addOrUpdateLocalCart(productData, !!editingItem);
-  };
-
-  const handleAddToTemp = (product: ProductType) => {
-    console.log(product);
-    setTempSelectedItems(prev => {
-      const existing = prev.find(i => i.product_id === product.id);
-      if (existing) {
-        const newQty = parseInt(existing.quantity as string) + 1;
-        return prev.map(i => i.id === existing.id ? {
-          ...i,
-          quantity: newQty,
-          total_amount: (parseFloat(i.product_price as string) * newQty).toFixed(2),
-        } : i);
-      } else {
-        const price = parseFloat(product.prices as string) || 0;
-        const qty = 1;
-        const total = (price * qty).toFixed(2);
-        const newItem: CartItemType = {
-          id: product.id,
-          cart_id: Date.now().toString(),
-          product_id: product.id,
-          category_id: product.category_id,
-          product_price: price.toFixed(2),
-          quantity: qty,
-          total_amount: total,
-          user_id: '999',
-          tableno: selectedTable!,
-          name: product.name,
-          item_image: product.item_image,
-        };
-        return [...prev, newItem];
-      }
-    });
-  };
-
-  const updateTempQuantity = (item: CartItemType, delta: number) => {
-    setTempSelectedItems(prev => {
-      const existing = prev.find(i => i.id === item.id);
-      if (existing) {
-        const newQty = parseInt(existing.quantity as string) + delta;
-        if (newQty <= 0) return prev.filter(i => i.id !== item.id);
-        return prev.map(i => i.id === item.id ? {
-          ...i,
-          quantity: newQty,
-          total_amount: (parseFloat(i.product_price as string) * newQty).toFixed(2),
-        } : i);
-      }
-      return prev;
-    });
-  };
-
-  const removeFromTemp = (item: CartItemType) => {
-    setTempSelectedItems(prev => prev.filter(i => i.id !== item.id));
-  };
-
-  const handleConfirmAdd = () => {
-    setCartItems(prev => {
-      let updated = [...prev];
-      tempSelectedItems.forEach(newItem => {
-        const existing = updated.find(i => i.product_id === newItem.product_id && i.tableno?.toString() === newItem.tableno?.toString());
-        if (existing) {
-          const newQty = parseInt(existing.quantity as string) + parseInt(newItem.quantity as string);
-          const newTotal = (parseFloat(existing.product_price as string) * newQty).toFixed(2);
-          updated = updated.map(i => i.id === existing.id ? { ...i, quantity: newQty, total_amount: newTotal } : i);
-        } else {
-          updated.push(newItem);
-        }
-      });
-      return updated;
-    });
-    setShowAddModal(false);
-    setTempSelectedItems([]);
-  };
-
-  const handleBackPress = () => {
-    if (navigation) {
-      navigation.goBack();
-    }
-  };
-
-  const handlePrintAllBill = () => {
-    if (!selectedTable || filteredCartItems.length === 0) {
-      Alert.alert('No Items', 'No cart items to print bill for.');
-      return;
-    }
-
+    const itemsForTable = groupedByTable[tableNo] || [];
+    const totalAmount = itemsForTable
+      .reduce((sum, item) => sum + parseFloat(item.total_amount as string), 0)
+      .toFixed(2);
     const consolidatedBill: ConsolidatedBillType = {
-      items: filteredCartItems,
-      totalAmount: filteredCartItems.reduce((sum, item) => sum + (parseFloat(item.total_amount as string) || 0), 0).toFixed(2),
-      userId: filteredCartItems[0]?.user_id?.toString() || 'N/A',
-      tableNo: selectedTable,
+      items: itemsForTable,
+      totalAmount,
+      userId,
+      tableNo,
     };
-
-    navigation.navigate('BillScreen', {
-      consolidatedBill: consolidatedBill,
-    });
+    navigation.navigate('BillScreen', { consolidatedBill });
   };
 
-  const handleClearCart = () => {
-    if (!selectedTable) return;
+  const handleSendToKitchen = () => {
+    if (!tableNo) {
+      Alert.alert('Error', 'Please select a table number first.', [{ text: 'OK' }]);
+      return;
+    }
+    const unservedItems = (groupedByTable[tableNo] || []).filter(item => !item.served);
+    if (unservedItems.length === 0) {
+      Alert.alert('No Items', 'No unserved items to send to kitchen.');
+      return;
+    }
+    const kitchenOrder = {
+      items: unservedItems,
+      tableNo,
+      userId,
+    };
+    navigation.navigate('KitchenScreen', { kitchenOrder });
+  };
+
+  const handleClearTable = async () => {
+    if (!tableNo) {
+      Alert.alert('Error', 'Please select a table to clear.', [{ text: 'OK' }]);
+      return;
+    }
+  
     Alert.alert(
-      'Clear Cart',
-      'Are you sure you want to clear the cart for this table?',
+      'Clear Table',
+      `Are you sure you want to clear all items from Table ${tableNo}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Yes',
+          text: 'Clear',
           style: 'destructive',
-          onPress: () => {
-            setCartItems(prev => prev.filter(item => item.tableno?.toString() !== selectedTable));
+          onPress: async () => {
+            try {
+              // Remove items from local storage
+              const stored = await AsyncStorage.getItem(CART_STORAGE_KEY);
+              let localItems: CartItemType[] = stored ? JSON.parse(stored) : [];
+  
+              // Filter out items for the current table (ensure type coercion)
+              const updatedItems = localItems.filter(
+                item => String(item.tableno) !== String(tableNo)
+              );
+  
+              // Save the updated items back to local storage
+              await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(updatedItems));
+  
+              // Update the UI
+              const updatedGrouped = { ...groupedByTable };
+              delete updatedGrouped[tableNo];
+              const updatedTableNumbers = sortedTableNumbers.filter(num => num !== tableNo);
+  
+              setGroupedByTable(updatedGrouped);
+              setSortedTableNumbers(updatedTableNumbers);
+  
+              // Select the first available table or clear selection
+              if (updatedTableNumbers.length > 0) {
+                setTableNo(updatedTableNumbers[0]);
+              } else {
+                setTableNo('');
+                setShowTableModal(true); // Show modal if no tables remain
+              }
+  
+              // TODO: Implement server-side deletion (replace with your API endpoint)
+              try {
+                const response = await fetch('YOUR_DELETE_TABLE_API_ENDPOINT', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    tableNo,
+                    userId,
+                  }),
+                });
+                if (!response.ok) {
+                  throw new Error(`Failed to clear table on server: ${response.status}`);
+                }
+              } catch (serverError) {
+                console.warn('Server-side deletion failed:', serverError);
+                // Optionally notify user but proceed with local changes
+                Alert.alert(
+                  'Warning',
+                  'Table cleared locally, but server sync failed. Please try again later.',
+                  [{ text: 'OK' }]
+                );
+              }
+  
+              Alert.alert('Success', `Table ${tableNo} has been cleared.`);
+            } catch (error) {
+              console.error('Error clearing table:', error);
+              Alert.alert(
+                'Error',
+                `Failed to clear the table: ${error.message || 'Unknown error'}. Please try again.`,
+                [{ text: 'OK' }]
+              );
+            }
           },
         },
-      ],
+      ]
     );
   };
+  
+  // Move isMounted logic to useEffect for proper cleanup
+  useEffect(() => {
+    let isMounted = true;
+  
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+  
+  // Move isMounted logic to useEffect for proper cleanup
+  useEffect(() => {
+    let isMounted = true;
+  
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
-  const handleAddNewTable = () => {
-    setNewTableNo('');
-    setShowTableModal(true);
-  };
-
-  const confirmAddTable = () => {
-    if (newTableNo && !isNaN(parseInt(newTableNo))) {
-      setSelectedTable(newTableNo);
-      setUserTables(prev => prev.includes(newTableNo) ? prev : [...prev, newTableNo]);
-    } else {
-      Alert.alert('Invalid', 'Please enter a valid table number.');
+  const handleSelectTable = () => {
+    if (!newTableNo.trim()) {
+      Alert.alert('Validation', 'Please enter a table number.', [{ text: 'OK' }]);
+      return;
     }
+    if (sortedTableNumbers.includes(newTableNo)) {
+      Alert.alert('Error', 'Table number already exists. Select it from the list.', [{ text: 'OK' }]);
+      return;
+    }
+    // Add empty group for new table to show immediately
+    setGroupedByTable({...groupedByTable, [newTableNo]: []});
+    setSortedTableNumbers([...sortedTableNumbers, newTableNo].sort((a, b) => Number(a) - Number(b)));
+    setTableNo(newTableNo);
     setShowTableModal(false);
+    setNewTableNo('');
   };
 
-  const renderInputField = (
-    key: keyof FormDataType,
-    label: string,
-    placeholder: string,
-    keyboardType: 'default' | 'numeric' | 'decimal-pad' = 'default',
-    editable = true,
-  ) => (
-    <View style={styles.inputContainer}>
-      <Text style={styles.inputLabel}>
-        {label} {!editable ? '' : '*'}
-      </Text>
-      <TextInput
-        style={[
-          styles.textInput,
-          !editable && styles.disabledInput,
-          formErrors[key] && styles.errorInput,
-        ]}
-        value={formData[key]}
-        onChangeText={text => {
-          setFormData(prev => ({ ...prev, [key]: text }));
-          if (formErrors[key]) {
-            setFormErrors(prev => ({ ...prev, [key]: null }));
-          }
-        }}
-        placeholder={placeholder}
-        placeholderTextColor="#888"
-        keyboardType={keyboardType}
-        editable={editable}
-      />
-      {formErrors[key] && (
-        <Text style={styles.errorText}>{formErrors[key]}</Text>
-      )}
-    </View>
-  );
+  const handleAddProduct = () => {
+    if (!tableNo) {
+      Alert.alert('Error', 'Please select or create a table number first.', [{ text: 'OK' }]);
+      setShowTableModal(true);
+      return;
+    }
+    navigation.navigate('Product', { user_id: userId, tableno: tableNo });
+  };
 
-  const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const renderProductItem = ({ item }: { item: ProductType }) => (
-    <TouchableOpacity
-      style={styles.productItem}
-      onPress={() => handleAddToTemp(item)}
-      activeOpacity={0.8}
-    >
-      {item.item_image ? (
-        <Image
-          source={{ uri: `http://deepikagroups.com/Dosadharbar/api/v1/images/${item.item_image}` }}
-          style={styles.productImage}
-          resizeMode="cover"
-        />
-      ) : (
-        <View style={styles.productImagePlaceholder} />
-      )}
-      <View style={styles.productInfo}>
-        <Text style={styles.productName}>{item.name}</Text>
-        <Text style={styles.productPrice}>₹{item.prices}</Text>
-      </View>
-    </TouchableOpacity>
-  );
-
-  const renderTempItem = ({ item }: { item: CartItemType }) => (
-    <View style={styles.tempItem}>
-      <Text style={styles.tempItemName}>{item.name}</Text>
-      <Text style={styles.tempItemPrice}>₹{item.product_price} x {item.quantity} = ₹{item.total_amount}</Text>
-      <View style={styles.tempItemButtons}>
-      <TouchableOpacity onPress={() => updateTempQuantity(item, 1)}>
-          <Icon name="add" size={20} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => updateTempQuantity(item, -1)}>
-          <Icon name="remove" size={20} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => removeFromTemp(item)}>
-          <Icon name="close" size={20} color="#F44336" />
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  const renderAddModal = () => (
-    <Modal
-      visible={showAddModal}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={() => {
-        setShowAddModal(false);
-        setEditingItem(null);
-        resetForm();
-        setSearchQuery('');
-        setTempSelectedItems([]);
-      }}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContainer}>
-          <LinearGradient
-            colors={['#333', '#222']}
-            style={styles.modalGradient}
-          >
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>
-                  {editingItem ? 'Edit Cart Item' : 'Add Product to Cart'}
-                </Text>
-                <TouchableOpacity
-                  style={styles.closeButton}
-                  onPress={() => {
-                    setShowAddModal(false);
-                    setEditingItem(null);
-                    resetForm();
-                    setSearchQuery('');
-                    setTempSelectedItems([]);
-                  }}
-                >
-                  <Icon name="close" size={24} color="#fff" />
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.modalSubtitle}>
-                {editingItem ? 'Update the product details below' : 'Search and select a product to add'}
-              </Text>
-              {editingItem ? (
-                <>
-                  {renderInputField(
-                    'product_id',
-                    'Product ID',
-                    'Enter Product ID',
-                    'numeric',
-                  )}
-                  {renderInputField(
-                    'category_id',
-                    'Category ID',
-                    'Enter Category ID',
-                    'numeric',
-                  )}
-                  {renderInputField(
-                    'product_price',
-                    'Product Price',
-                    'Enter Price (e.g., 20.00)',
-                    'decimal-pad',
-                  )}
-                  {renderInputField(
-                    'quantity',
-                    'Quantity',
-                    'Enter Quantity',
-                    'numeric',
-                  )}
-                  {renderInputField(
-                    'total_amount',
-                    'Total Amount (Auto-calculated)',
-                    'Auto-calculated',
-                    'numeric',
-                    false,
-                  )}
-                  {renderInputField(
-                    'user_id',
-                    'User ID',
-                    'Enter User ID',
-                    'numeric',
-                  )}
-                  {renderInputField(
-                    'tableno',
-                    'Table Number',
-                    'Enter Table Number',
-                    'numeric',
-                  )}
-                  <View style={styles.modalButtonContainer}>
-                    <TouchableOpacity
-                      style={[
-                        styles.submitButton,
-                        isSubmitting && styles.disabledButton,
-                      ]}
-                      onPress={handleSubmit}
-                      activeOpacity={0.8}
-                      disabled={isSubmitting}
-                    >
-                      {isSubmitting ? (
-                        <ActivityIndicator color="#fff" size="small" />
-                      ) : (
-                        <Text style={styles.submitButtonText}>
-                          Update Cart
-                        </Text>
-                      )}
-                    </TouchableOpacity>
-                  </View>
-                </>
-              ) : (
-                <>
-                  <TextInput
-                    style={styles.textInput}
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                    placeholder="Search products..."
-                    placeholderTextColor="#888"
-                  />
-                  <FlatList
-                    data={filteredProducts}
-                    renderItem={renderProductItem}
-                    keyExtractor={item => item.id.toString()}
-                    style={styles.productList}
-                    ListEmptyComponent={
-                      <Text style={styles.emptyProductText}>No products found</Text>
-                    }
-                    showsVerticalScrollIndicator={false}
-                  />
-                  {tempSelectedItems.length > 0 && (
-                    <>
-                      <Text style={styles.previewTitle}>Selected Items Preview</Text>
-                      <FlatList
-                        data={tempSelectedItems}
-                        renderItem={renderTempItem}
-                        keyExtractor={item => item.id?.toString() || ''}
-                        style={styles.tempList}
-                        showsVerticalScrollIndicator={false}
-                      />
-                    </>
-                  )}
-                  <View style={styles.modalButtonContainer}>
-                    <TouchableOpacity
-                      style={styles.submitButton}
-                      onPress={handleConfirmAdd}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.submitButtonText}>Confirm Add</Text>
-                    </TouchableOpacity>
-                  </View>
-                </>
-              )}
-            </View>
-          </LinearGradient>
-        </View>
-      </View>
-    </Modal>
-  );
-
-  const renderTableModal = () => (
-    <Modal
-      visible={showTableModal}
-      transparent={true}
-      animationType="fade"
-      onRequestClose={() => setShowTableModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={styles.modalContainerSmall}>
-          <LinearGradient colors={['#333', '#222']} style={styles.modalGradient}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add New Table</Text>
-              <TouchableOpacity
-                style={styles.closeButton}
-                onPress={() => setShowTableModal(false)}
-              >
-                <Icon name="close" size={24} color="#fff" />
-              </TouchableOpacity>
-            </View>
-            <TextInput
-              style={styles.textInput}
-              value={newTableNo}
-              onChangeText={setNewTableNo}
-              placeholder="Enter Table Number"
-              placeholderTextColor="#888"
-              keyboardType="numeric"
-            />
-            <TouchableOpacity
-              //style={[styles.submitButton,{height:50}]}
-              style={{backgroundColor:'#4CAF50',padding:10,borderRadius:5}}
-              onPress={confirmAddTable}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.submitButtonText,{textAlign:'center'}]}>Add Table</Text>
-            </TouchableOpacity>
-          </LinearGradient>
-        </View>
-      </View>
-    </Modal>
-  );
-
-  const renderCartItem = ({
-    item,
-    index,
-  }: {
-    item: CartItemType;
-    index: number;
-  }) => (
+  const renderCartItem = ({ item }: { item: CartItemType }) => (
     <View style={styles.cartCard}>
       <LinearGradient colors={['#333', '#222']} style={styles.cardGradient}>
         <View style={styles.cartItemHeaderRowFixed}>
-          <View style={{ flex: 1 }} />
           <View style={styles.buttonGroupWithIdFixed}>
+            <Text style={styles.cartItemLabel}>ID: {item.product_id}</Text>
             <View style={styles.buttonGroupFixed}>
               <TouchableOpacity
                 style={styles.quantityButton}
-                onPress={() =>
-                  updateCartQuantity(
-                    item,
-                    parseInt(item.quantity as string) + 1,
-                  )
-                }
-                activeOpacity={0.8}
-                disabled={isSubmitting}
+                onPress={() => updateCartQuantity(item, parseInt(item.quantity as string) - 1)}
               >
-                <Icon name="add" size={16} color="#fff" />
+                <Text style={styles.cartItemValue}>-</Text>
               </TouchableOpacity>
+              <Text style={styles.cartItemValue}>{item.quantity}</Text>
               <TouchableOpacity
                 style={styles.quantityButton}
-                onPress={() =>
-                  updateCartQuantity(
-                    item,
-                    parseInt(item.quantity as string) - 1,
-                  )
-                }
-                activeOpacity={0.8}
-                disabled={isSubmitting}
+                onPress={() => updateCartQuantity(item, parseInt(item.quantity as string) + 1)}
               >
-                <Icon name="remove" size={16} color="#fff" />
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={() => handleEditProduct(item)}
-                activeOpacity={0.8}
-              >
-                <Icon name="edit" size={16} color="#fff" />
+                <Text style={styles.cartItemValue}>+</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.deleteButton}
-                onPress={() => deleteCartItem(item)}
-                activeOpacity={0.8}
-                disabled={isSubmitting}
+                onPress={() => handleDeleteItem(item)}
               >
                 <Icon name="delete" size={16} color="#fff" />
               </TouchableOpacity>
@@ -848,28 +469,17 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
         <View style={styles.cartItemImageRow}>
           {item.item_image ? (
             <Image
-              source={{
-                uri: `http://deepikagroups.com/Dosadharbar/api/v1/images/${item.item_image}`,
-              }}
+              source={{ uri: `${IMAGE_BASE_URL}${item.item_image}` }}
               style={styles.cartItemImage}
-              resizeMode="cover"
             />
           ) : (
             <View style={styles.cartItemImagePlaceholder} />
           )}
           <View style={styles.cartItemNameCol}>
-            <Text style={styles.cartItemName}>{item.name}</Text>
+            <Text style={styles.cartItemName}>{item.name || 'Unknown'}</Text>
           </View>
         </View>
         <View style={styles.cartItemContent}>
-          <View style={styles.cartItemRow}>
-            <Text style={styles.cartItemLabel}>Product ID:</Text>
-            <Text style={styles.cartItemValue}>{item.id}</Text>
-          </View>
-          <View style={styles.cartItemRow}>
-            <Text style={styles.cartItemLabel}>Name:</Text>
-            <Text style={styles.cartItemValue}>{item.name}</Text>
-          </View>
           <View style={styles.cartItemRow}>
             <Text style={styles.cartItemLabel}>Category ID:</Text>
             <Text style={styles.cartItemValue}>{item.category_id}</Text>
@@ -879,199 +489,192 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
             <Text style={styles.cartItemPrice}>₹{item.product_price}</Text>
           </View>
           <View style={styles.cartItemRow}>
-            <Text style={styles.cartItemLabel}>Quantity:</Text>
-            <Text style={styles.cartItemValue}>{item.quantity}</Text>
-          </View>
-          <View style={styles.cartItemRow}>
-            <Text style={styles.cartItemLabel}>Total Amount:</Text>
+            <Text style={styles.cartItemLabel}>Total:</Text>
             <Text style={styles.cartItemTotal}>₹{item.total_amount}</Text>
-          </View>
-          <View style={styles.cartItemRow}>
-            <Text style={styles.cartItemLabel}>User ID:</Text>
-            <Text style={styles.cartItemValue}>{item.user_id}</Text>
-          </View>
-          <View style={styles.cartItemRow}>
-            <Text style={styles.cartItemLabel}>Table Number</Text>
-            <Text style={styles.cartItemValue}>{item.tableno}</Text>
           </View>
         </View>
       </LinearGradient>
     </View>
   );
 
+  const renderTableModal = () => (
+    <Modal
+      visible={showTableModal}
+      animationType="fade"
+      transparent
+      onRequestClose={() => setShowTableModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <LinearGradient
+          colors={['#333', '#222']}
+          style={styles.modalContainerSmall}
+        >
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>New Table</Text>
+            <TouchableOpacity
+              style={styles.closeButton}
+              onPress={() => setShowTableModal(false)}
+            >
+              <Icon name="close" size={24} color="#888" />
+            </TouchableOpacity>
+          </View>
+          <TextInput
+            style={styles.textInput}
+            placeholder="Enter Table Number"
+            placeholderTextColor="#888"
+            value={newTableNo}
+            onChangeText={setNewTableNo}
+            keyboardType="numeric"
+          />
+          <View style={styles.modalButtonContainer}>
+            <TouchableOpacity
+              style={styles.submitButton}
+              onPress={handleSelectTable}
+            >
+              <Text style={styles.submitButtonText}>Confirm</Text>
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
+      </View>
+    </Modal>
+  );
+
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={() => navigation.goBack()}
+      >
+        <Text style={styles.backButtonText}>{'< Back'}</Text>
+      </TouchableOpacity>
+      <Text style={styles.title}>Cart Details</Text>
+      <Text style={styles.subtitle}>
+        {tableNo ? `Table No: ${tableNo}` : 'Select a Table'}
+      </Text>
+      <View style={styles.statsContainer}>
+        <View style={styles.statBox}>
+          <Text style={styles.statValue}>
+            {(groupedByTable[tableNo] || []).length}
+          </Text>
+          <Text style={styles.statLabel}>Items</Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={styles.statValue}>
+            ₹
+            {(groupedByTable[tableNo] || [])
+              .reduce((sum, item) => sum + parseFloat(item.total_amount as string), 0)
+              .toFixed(2)}
+          </Text>
+          <Text style={styles.statLabel}>Total</Text>
+        </View>
+      </View>
+      <View style={styles.buttonContainer}>
+        <View style={styles.buttonRow}>
+          <TouchableOpacity
+            style={[styles.addButton, { flex: 1, marginRight: 10 }]}
+            onPress={handleAddProduct}
+          >
+            <Text style={styles.addButtonText}>Add Product</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.printAllButton, { flex: 1 }]}
+            onPress={handlePrintBill}
+          >
+            <Text style={styles.printAllButtonText}>Print Bill</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={[styles.buttonRow, { marginTop: 10 }]}>
+          <TouchableOpacity
+            style={[styles.clearButton, { flex: 1, marginRight: 10 }]}
+            onPress={handleClearTable}
+            disabled={!tableNo || !groupedByTable[tableNo]?.length}
+          >
+            <Text style={styles.clearButtonText}>Clear Table</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.toKitchenButton, { flex: 1 }]}
+            onPress={handleSendToKitchen}
+          >
+            <Text style={styles.toKitchenButtonText}>To Kitchen</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+      <View style={styles.tableSelectorHeader}>
+        <Text style={styles.tableSelectorTitle}>Tables</Text>
+        <TouchableOpacity
+          style={styles.addTableButton}
+          onPress={() => setShowTableModal(true)}
+        >
+          <Icon name="add" size={24} color="#fff" />
+        </TouchableOpacity>
+      </View>
+      <ScrollView horizontal style={styles.tableSelectorContainer} showsHorizontalScrollIndicator={false}>
+        {sortedTableNumbers.map((num) => (
+          <TouchableOpacity
+            key={num}
+            style={[styles.tableNumberButton, num === tableNo && styles.tableNumberButtonActive]}
+            onPress={() => setTableNo(num)}
+          >
+            <Text style={[styles.tableNumberText, num === tableNo && styles.tableNumberTextActive]}>
+              Table {num}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
+
   const renderEmptyComponent = () => (
     <View style={styles.emptyContainer}>
-      <Text style={styles.emptyIcon}>🛒</Text>
-      <Text style={styles.emptyTitle}>Cart is Empty</Text>
+      <Icon name="shopping-cart" style={styles.emptyIcon} color="#888" />
+      <Text style={styles.emptyTitle}>No Items in Cart</Text>
       <Text style={styles.emptySubtitle}>
-        Add some delicious items to your cart to get started
+        Add items to the cart to proceed with billing.
       </Text>
       <TouchableOpacity
         style={styles.addFirstItemButton}
         onPress={handleAddProduct}
-        activeOpacity={0.8}
       >
-        <Text style={styles.addFirstItemText}>Add First Item</Text>
+        <Text style={styles.addFirstItemText}>Add Item</Text>
       </TouchableOpacity>
     </View>
   );
-
-  const [userTables, setUserTables] = useState<string[]>([]);
-
-  const renderHeader = () => {
-    const uniqueTables = Array.from(new Set([
-      ...cartItems.map(item => item.tableno?.toString() || ''),
-      ...userTables,
-    ])).filter(Boolean);
-
-    return (
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={handleBackPress}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.backButtonText}>{'< Back'}</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>CART DETAILS</Text>
-        <Text style={styles.subtitle}>Manage your cart items</Text>
-        {/* Table Selection UI */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 15, flexWrap: 'wrap' }}>
-          <Text style={{ color: '#fff', fontSize: 16, marginRight: 10 }}>Choose Table:</Text>
-          {uniqueTables.length === 0 ? (
-            <Text style={{ color: '#888' }}>No Tables</Text>
-          ) : (
-            uniqueTables.map(table => (
-              <TouchableOpacity
-                key={table}
-                style={{
-                  backgroundColor: selectedTable === table ? '#4CAF50' : '#333',
-                  paddingHorizontal: 15,
-                  paddingVertical: 8,
-                  borderRadius: 20,
-                  marginRight: 8,
-                  marginBottom: 8,
-                  borderWidth: selectedTable === table ? 2 : 1,
-                  borderColor: selectedTable === table ? '#4CAF50' : '#444',
-                }}
-                onPress={() => setSelectedTable(table)}
-              >
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>{table}</Text>
-              </TouchableOpacity>
-            ))
-          )}
-          <TouchableOpacity
-            style={{
-              backgroundColor: '#4CAF50',
-              paddingHorizontal: 15,
-              paddingVertical: 8,
-              borderRadius: 20,
-              marginRight: 8,
-              marginBottom: 8,
-            }}
-            onPress={handleAddNewTable}
-          >
-            <Text style={{ color: '#fff', fontWeight: 'bold' }}>+</Text>
-          </TouchableOpacity>
-        </View>
-        <View style={styles.statsContainer}>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>{filteredCartItems?.length}</Text>
-            <Text style={styles.statLabel}>Items</Text>
-          </View>
-          <View style={styles.statBox}>
-            <Text style={styles.statValue}>₹{filteredCartItems?.reduce((sum, item) => sum + (parseFloat(item.total_amount as string) || 0), 0).toFixed(2)}</Text>
-            <Text style={styles.statLabel}>Total</Text>
-          </View>
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={handleAddProduct}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.addButtonText}>+ Add Product</Text>
-          </TouchableOpacity>
-          {selectedTable && (
-            <TouchableOpacity
-              style={styles.clearButton}
-              onPress={handleClearCart}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.clearButtonText}>Clear Cart</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        <TouchableOpacity
-          style={styles.printAllButton}
-          onPress={handlePrintAllBill}
-          activeOpacity={0.8}
-          disabled={filteredCartItems?.length === 0}
-        >
-          <Text style={styles.printAllButtonText}>Print Bill for This Table</Text>
-        </TouchableOpacity>
-        {/* {selectedTable && (
-          <TouchableOpacity
-            style={styles.clearButton}
-            onPress={handleClearCart}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.clearButtonText}>Clear Cart</Text>
-          </TouchableOpacity>
-        )} */}
-      </View>
-    );
-  };
 
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#000" />
-        {renderHeader()}
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#fff" />
-          <Text style={styles.loadingText}>Loading Cart Details...</Text>
+          <Text style={styles.loadingText}>Loading Cart...</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  const filteredCartItems = selectedTable
-    ? cartItems.filter(item => item.tableno?.toString() === selectedTable)
-    : [];
-
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
-      {renderAddModal()}
       {renderTableModal()}
-      {/* Only show cart if a table is selected */}
-      {selectedTable ? (
-        <FlatList
-          data={filteredCartItems}
-          renderItem={renderCartItem}
-          keyExtractor={(item, index) => `cart-item-${item.product_id}-${index}`}
-          ListHeaderComponent={renderHeader}
-          ListEmptyComponent={renderEmptyComponent}
-          contentContainerStyle={styles.listContainer}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              colors={['#fff']}
-              tintColor="#fff"
-              title="Pull to refresh"
-              titleColor="#fff"
-            />
-          }
-        />
-      ) : (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          {renderHeader()}
-          <Text style={{ color: '#888', fontSize: 18, marginTop: 40 }}>Please select a table to view its cart.</Text>
-        </View>
-      )}
+      <FlatList
+        data={groupedByTable[tableNo] || []}
+        renderItem={renderCartItem}
+        keyExtractor={item => item.id?.toString() || `${item.product_id}-${item.tableno}`}
+        ListHeaderComponent={renderHeader}
+        ListEmptyComponent={renderEmptyComponent}
+        contentContainerStyle={styles.listContainer}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#fff']}
+            tintColor="#fff"
+            title="Pull to refresh"
+            titleColor="#fff"
+          />
+        }
+      />
     </SafeAreaView>
   );
 };
@@ -1140,40 +743,126 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 12,
   },
+  buttonContainer: {
+    marginBottom: 15,
+  },
+  buttonRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
   addButton: {
     backgroundColor: '#4CAF50',
-    paddingHorizontal: 25,
+    paddingHorizontal: 15,
     paddingVertical: 12,
     borderRadius: 25,
+    flex: 1,
+    marginRight: 10,
   },
   addButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    textAlign: 'center',
   },
   printAllButton: {
     backgroundColor: '#2196F3',
-    paddingHorizontal: 25,
+    paddingHorizontal: 15,
     paddingVertical: 12,
     borderRadius: 25,
-    marginTop: 10,
+    flex: 1,
+    marginRight: 10,
   },
   printAllButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    textAlign: 'center',
   },
-  clearButton: {
-    backgroundColor: '#F44336',
-    paddingHorizontal: 25,
+  toKitchenButton: {
+    backgroundColor: '#FF9800',
+    paddingHorizontal: 15,
     paddingVertical: 12,
     borderRadius: 25,
-    marginTop: 0,
+    flex: 1,
   },
-  clearButtonText: {
+  toKitchenButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  clearButton: {
+    backgroundColor: '#f44336',
+    paddingHorizontal: 15,
+    paddingVertical: 12,
+    borderRadius: 25,
+    flex: 1,
+    marginRight: 10,
+    opacity: 1,
+  },
+  clearButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  clearButtonDisabled: {
+    opacity: 0.5,
+  },
+  tableSelectorHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    paddingHorizontal: 20,
+    marginTop: 10,
+  },
+  tableSelectorTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  addTableButton: {
+    backgroundColor: '#F44336',
+    padding: 8,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tableSelectorContainer: {
+    marginTop: 10,
+    marginBottom: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 0,
+    flexDirection: 'row',
+    minHeight: 50,
+  },
+  tableNumberButton: {
+    backgroundColor: '#444',
+    borderRadius: 15,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    marginRight: 10,
+    borderWidth: 1,
+    borderColor: '#666',
+    minWidth: 70,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tableNumberButtonActive: {
+    backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
+  },
+  tableNumberText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+  tableNumberTextActive: {
+    color: '#fff',
+    fontWeight: 'bold',
+    textDecorationLine: 'underline',
   },
   cartCard: {
     marginBottom: 15,
@@ -1211,14 +900,6 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 8,
     marginBottom: 2,
-  },
-  editButton: {
-    backgroundColor: '#555',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 15,
-    borderWidth: 1,
-    borderColor: '#666',
   },
   quantityButton: {
     backgroundColor: '#4CAF50',
@@ -1346,25 +1027,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  modalContainer: {
-    width: width * 0.9,
-    maxHeight: '80%',
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
   modalContainerSmall: {
     width: width * 0.7,
     borderRadius: 20,
     overflow: 'hidden',
-  },
-  modalGradient: {
-    padding: 25,
-    borderWidth: 1,
-    borderColor: '#444',
-  },
-  modalContent: {
-    flexGrow: 1,
-    maxHeight: '100%',
+    padding: 20,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -1382,21 +1049,6 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
-  modalSubtitle: {
-    fontSize: 14,
-    color: '#888',
-    textAlign: 'center',
-    marginBottom: 25,
-  },
-  inputContainer: {
-    marginBottom: 15,
-  },
-  inputLabel: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 8,
-  },
   textInput: {
     backgroundColor: '#444',
     borderWidth: 1,
@@ -1408,24 +1060,9 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 20,
   },
-  disabledInput: {
-    backgroundColor: '#333',
-    color: '#888',
-  },
-  errorInput: {
-    borderColor: '#FF5252',
-    borderWidth: 2,
-  },
-  errorText: {
-    color: '#FF5252',
-    fontSize: 12,
-    marginTop: 5,
-    marginLeft: 5,
-  },
   modalButtonContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 20,
   },
   submitButton: {
     backgroundColor: '#4CAF50',
@@ -1439,86 +1076,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  disabledButton: {
-    backgroundColor: '#666',
-  },
-  productList: {
-    maxHeight: 200,
-    marginBottom: 20,
-  },
-  productItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#444',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#555',
-  },
-  productImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 10,
-    marginRight: 10,
-  },
-  productImagePlaceholder: {
-    width: 50,
-    height: 50,
-    borderRadius: 10,
-    backgroundColor: '#333',
-    marginRight: 10,
-  },
-  productInfo: {
-    flex: 1,
-  },
-  productName: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  productPrice: {
-    color: '#4CAF50',
-    fontSize: 14,
-  },
-  emptyProductText: {
-    color: '#888',
-    textAlign: 'center',
-    marginTop: 20,
-  },
-  previewTitle: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  tempList: {
-    maxHeight: 200,
-    marginBottom: 20,
-  },
-  tempItem: {
-    backgroundColor: '#444',
-    borderRadius: 10,
-    padding: 10,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#555',
-  },
-  tempItemName: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  tempItemPrice: {
-    color: '#4CAF50',
-    fontSize: 14,
-  },
-  tempItemButtons: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 10,
-    marginTop: 5,
   },
 });
 

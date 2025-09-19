@@ -47,10 +47,10 @@ interface ProductFormType {
   image: any;
 }
 
-interface GetProductsScreenProps {
-  navigation: any;
-  route?: any;
-}
+import type { RootStackParamList } from '../AppNav';
+import type { StackScreenProps } from '@react-navigation/stack';
+
+type GetProductsScreenProps = StackScreenProps<RootStackParamList, 'GetProducts'>;
 
 const GetProductsScreen: React.FC<GetProductsScreenProps> = ({
   navigation,

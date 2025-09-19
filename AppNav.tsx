@@ -6,9 +6,26 @@ import CategoriesScreen from "./Components/Category";
 import GetProductsScreen from "./Components/GetProducts";
 import CartDetailsScreen from "./Components/CardDetails";
 import BillScreen from "./Components/BillScreen";
+import ReportScreen from "./Components/ReportScreen";
+import ProductScreen from "./Components/productScreen";
+import { ConsolidatedBill} from "./Components/BillScreen";
+import { CartItemType } from "./Components/productScreen";
+import { KitchenOrder } from "./Components/KitchanScreen";
+import KitchenScreen from "./Components/KitchanScreen";
 
 
-const Stack = createStackNavigator();
+export type RootStackParamList = {
+  Home: undefined;
+  Category: undefined;
+  GetProducts: undefined;
+  CardDetails: undefined;
+  BillScreen: ConsolidatedBill;
+  Report: undefined;
+  Product: CartItemType;
+  KitchenScreen: KitchenOrder;
+};
+
+const Stack = createStackNavigator<RootStackParamList>();
 
 export default function App() {
   return (
@@ -24,6 +41,9 @@ export default function App() {
         <Stack.Screen name="GetProducts" component={GetProductsScreen} />
         <Stack.Screen name="CardDetails" component={CartDetailsScreen} />
         <Stack.Screen name="BillScreen" component={BillScreen} />
+        <Stack.Screen name="Report" component={ReportScreen} />
+        <Stack.Screen name="Product" component={ProductScreen} />
+        <Stack.Screen name="KitchenScreen" component={KitchenScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

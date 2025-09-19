@@ -82,7 +82,7 @@ const CategoriesScreen: React.FC<CategoriesScreenProps> = ({ navigation }) => {
         setImageBaseUrl(data['image_link']);
       }
       const activeCategories = data['Category'].filter(
-        (category: CategoryType) => category.status === 'Active',
+        (category: CategoryType) => (category.status === 'Active' || category.status === 'Pending') ,
       );
       setCategories(activeCategories);
     } catch (error: any) {
@@ -169,6 +169,7 @@ const CategoriesScreen: React.FC<CategoriesScreenProps> = ({ navigation }) => {
       if (isEditing) formData.append('id', categoryForm.id);
       formData.append('name', categoryForm.name);
       formData.append('status', categoryForm.status);
+      console.log('categoryForm', categoryForm);
       if (categoryForm.image) {
         const localUri = categoryForm.image.uri;
         const filename = localUri.split('/').pop();
@@ -180,6 +181,7 @@ const CategoriesScreen: React.FC<CategoriesScreenProps> = ({ navigation }) => {
           type,
         } as any);
       }
+      console.log('formData', formData);
       const response = await fetch(
         'http://unitech.agency/Dosadharbar/api/v1/add_Category',
         {

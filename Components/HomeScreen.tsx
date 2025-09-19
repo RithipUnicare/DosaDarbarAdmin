@@ -20,6 +20,7 @@ type RootStackParamList = {
   Category: undefined;
   GetProducts: undefined;
   CardDetails: undefined;
+  Report: undefined;
 };
 
 const HomeScreen: React.FC = () => {
@@ -35,6 +36,10 @@ const HomeScreen: React.FC = () => {
 
   const handleCardDetailsPress = () => {
     navigation.navigate('CardDetails');
+  };
+
+  const handleReportPress = () => {
+    navigation.navigate('Report');
   };
 
   return (
@@ -89,23 +94,42 @@ const HomeScreen: React.FC = () => {
             </TouchableOpacity>
           </View>
 
-          {/* Second Row - Card Details */}
-          <TouchableOpacity
-            style={styles.fullWidthCard}
-            onPress={handleCardDetailsPress}
-            activeOpacity={0.8}
-          >
-            <LinearGradient
-              colors={['#333', '#222']}
-              style={styles.fullWidthCardGradient}
+          {/* Second Row - Card Details and Report */}
+          <View style={styles.row}>
+            <TouchableOpacity
+              style={styles.card}
+              onPress={handleCardDetailsPress}
+              activeOpacity={0.8}
             >
-              <View style={styles.cardIcon}>
-                <Text style={styles.cardIconText}>🛎️</Text>
-              </View>
-              <Text style={styles.cardTitle}>Card Details</Text>
-              <Text style={styles.cardSubtitle}>Manage your payment cards</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+              <LinearGradient
+                colors={['#333', '#222']}
+                style={styles.cardGradient}
+              >
+                <View style={styles.cardIcon}>
+                  <Text style={styles.cardIconText}>🛎️</Text>
+                </View>
+                <Text style={styles.cardTitle}>Card Details</Text>
+                <Text style={styles.cardSubtitle}>Manage your payment cards</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.card}
+              onPress={handleReportPress}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['#333', '#222']}
+                style={styles.cardGradient}
+              >
+                <View style={styles.cardIcon}>
+                  <Text style={styles.cardIconText}>📊</Text>
+                </View>
+                <Text style={styles.cardTitle}>Daily Report</Text>
+                <Text style={styles.cardSubtitle}>View today's orders</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Spacer */}
@@ -143,18 +167,6 @@ const styles = StyleSheet.create({
     marginTop: 40,
     textAlign: 'center',
   },
-  subtitle: {
-    fontSize: 18,
-    color: '#888',
-    marginBottom: 15,
-  },
-  description: {
-    fontSize: 16,
-    color: '#ccc',
-    textAlign: 'center',
-    lineHeight: 22,
-    paddingHorizontal: 20,
-  },
   mainContent: {
     flex: 1,
     paddingTop: 20,
@@ -179,30 +191,6 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
   },
   cardGradient: {
-    flex: 1,
-    padding: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#444',
-    borderRadius: 15,
-  },
-  fullWidthCard: {
-    width: '100%',
-    height: 140,
-    borderRadius: 15,
-    overflow: 'hidden',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    marginBottom: 20,
-  },
-  fullWidthCardGradient: {
     flex: 1,
     padding: 20,
     alignItems: 'center',
@@ -242,17 +230,6 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 14,
     textAlign: 'center',
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: 10,
-    paddingHorizontal: 5,
-    marginBottom: 20,
-    marginTop: 20, // ensure marginTop is 20
-  },
-  backButtonText: {
-    color: '#fff',
-    fontSize: 16,
   },
 });
 
