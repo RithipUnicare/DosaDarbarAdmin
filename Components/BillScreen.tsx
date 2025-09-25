@@ -74,10 +74,14 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
   const [bluetoothEnabled, setBluetoothEnabled] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [devices, setDevices] = useState<IBLEPrinter[]>([]);
-  const [selectedDevice, setSelectedDevice] = useState<IBLEPrinter | null>(null);
+  const [selectedDevice, setSelectedDevice] = useState<IBLEPrinter | null>(
+    null,
+  );
   const [showDeviceModal, setShowDeviceModal] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
-  const [defaultPrinterMac, setDefaultPrinterMac] = useState<string | null>(null);
+  const [defaultPrinterMac, setDefaultPrinterMac] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     loadDefaultPrinter();
@@ -93,7 +97,10 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
 
   const setAsDefaultPrinter = async () => {
     if (selectedDevice && selectedDevice.inner_mac_address) {
-      await AsyncStorage.setItem(DEFAULT_PRINTER_KEY, selectedDevice.inner_mac_address);
+      await AsyncStorage.setItem(
+        DEFAULT_PRINTER_KEY,
+        selectedDevice.inner_mac_address,
+      );
       setDefaultPrinterMac(selectedDevice.inner_mac_address);
       Alert.alert('Success', 'Printer set as default.');
     } else {
@@ -147,7 +154,10 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
         await scanDevices();
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to check Bluetooth status. Please ensure Bluetooth is enabled.');
+      Alert.alert(
+        'Error',
+        'Failed to check Bluetooth status. Please ensure Bluetooth is enabled.',
+      );
     }
   };
 
@@ -158,14 +168,27 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
       Alert.alert('Success', 'Connected to default printer.');
     } catch (error) {
       //console.error('Default printer connection error:', error);
-      Alert.alert('Error', 'Failed to connect to default printer. Scanning for devices...');
+      Alert.alert(
+        'Error',
+        'Failed to connect to default printer. Scanning for devices...',
+      );
       await scanDevices();
     }
   };
 
   const isPotentialPrinter = (device: IBLEPrinter): boolean => {
     const name = device.device_name?.toLowerCase() || '';
-    const printerKeywords = ['printer', 'print', 'thermal', 'pos', 'receipt', 'epson', 'star', 'zebra', 'citizen'];
+    const printerKeywords = [
+      'printer',
+      'print',
+      'thermal',
+      'pos',
+      'receipt',
+      'epson',
+      'star',
+      'zebra',
+      'citizen',
+    ];
     return printerKeywords.some(keyword => name.includes(keyword));
   };
 
@@ -175,23 +198,26 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
     setIsScanning(true);
     try {
       const printers = await BLEPrinter.getDeviceList();
-      
-      
+
       if (Array.isArray(printers) && printers.length > 0) {
         const potentialPrinters = printers.filter(isPotentialPrinter);
-        const devicesToShow = potentialPrinters.length > 0 ? potentialPrinters : printers;
-        
+        const devicesToShow =
+          potentialPrinters.length > 0 ? potentialPrinters : printers;
+
         setDevices(devicesToShow);
-       
+
         setShowDeviceModal(true);
       } else {
         Alert.alert(
-          'No Devices Found', 
+          'No Devices Found',
           'No Bluetooth devices found. Please ensure:\n1. Bluetooth is enabled\n2. Your thermal printer is turned on\n3. The printer is paired in Android Bluetooth settings',
         );
       }
     } catch (error) {
-      Alert.alert('Scan Error', 'Failed to scan for devices. Ensure Bluetooth is enabled and permissions are granted.');
+      Alert.alert(
+        'Scan Error',
+        'Failed to scan for devices. Ensure Bluetooth is enabled and permissions are granted.',
+      );
     } finally {
       setIsScanning(false);
     }
@@ -204,20 +230,21 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
       setShowDeviceModal(false);
 
       const macAddress = device.inner_mac_address;
-      
+
       if (!macAddress) {
         Alert.alert('Error', 'Device MAC address not found');
         return;
       }
 
-      
-      
       await BLEPrinter.connectPrinter(macAddress);
       setIsConnected(true);
     } catch (error) {
       //console.error('Connection error:', error);
       setIsConnected(false);
-      Alert.alert('Connection Failed', 'Failed to connect to the printer. Please ensure the printer is turned on and paired in Bluetooth settings.');
+      Alert.alert(
+        'Connection Failed',
+        'Failed to connect to the printer. Please ensure the printer is turned on and paired in Bluetooth settings.',
+      );
     }
   };
 
@@ -230,7 +257,10 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
         timestamp: dayjs().format(),
       };
       orderHistory.push(newOrder);
-      await AsyncStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(orderHistory));
+      await AsyncStorage.setItem(
+        ORDER_STORAGE_KEY,
+        JSON.stringify(orderHistory),
+      );
     } catch (error) {
       //console.error('Failed to save order to history:', error);
     }
@@ -238,7 +268,10 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
 
   const handlePrintBill = async () => {
     if (Platform.OS === 'ios') {
-      Alert.alert('Not Supported', 'Bluetooth printing requires additional iOS setup with this library.');
+      Alert.alert(
+        'Not Supported',
+        'Bluetooth printing requires additional iOS setup with this library.',
+      );
       return;
     }
     if (!bluetoothEnabled) {
@@ -246,7 +279,10 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
       return;
     }
     if (!isConnected) {
-      Alert.alert('Not Connected', 'Please select and connect to a printer first.');
+      Alert.alert(
+        'Not Connected',
+        'Please select and connect to a printer first.',
+      );
       return;
     }
     if (!consolidatedBill?.items?.length) {
@@ -256,12 +292,17 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
 
     setIsPrinting(true);
     try {
-      const totalQuantity = consolidatedBill?.items?.reduce((sum, item) => sum + (parseInt(item.quantity as string) || 0), 0);
+      const totalQuantity = consolidatedBill?.items?.reduce(
+        (sum, item) => sum + (parseInt(item.quantity as string) || 0),
+        0,
+      );
 
       const itemsText = consolidatedBill.items
         .map((item, index) => {
           const srNo = `${(index + 1).toString().padStart(2, '0')}.`;
-          const itemName = (item.name || 'N/A').substring(0, 12).padEnd(12, ' ');
+          const itemName = (item.name || 'N/A')
+            .substring(0, 12)
+            .padEnd(12, ' ');
           const quantity = (item.quantity || '0').toString().padStart(1, ' ');
           const price = parseFloat(String(item.product_price ?? 0)).toFixed(2);
           const total = parseFloat(String(item.total_amount ?? 0)).toFixed(2);
@@ -278,6 +319,10 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
       const printText = `
 <C>============================</C>
 <C>DOSA DHARBHAR</C>
+<C>============================</C>
+<L>Family Restaurant </L>
+<L>Periyapalayam </L>
+<L>ph no : 8056818630</L>
 <C>============================</C>
 <C>Bill No: ${billNo}</C>
 <L>Date: ${dayjs().format('YYYY-MM-DD HH:mm:ss')}</L>
@@ -298,7 +343,7 @@ ${itemsText}
 
       await BLEPrinter.printText(printText);
       await saveOrderToHistory();
-      
+
       // Clear the cart after successful print
       try {
         await AsyncStorage.removeItem(CART_STORAGE_KEY);
@@ -309,9 +354,11 @@ ${itemsText}
       // Clear cart for this table after printing
       const storedCart = await AsyncStorage.getItem(CART_STORAGE_KEY);
       let cartItems: CartItemType[] = storedCart ? JSON.parse(storedCart) : [];
-      cartItems = cartItems.filter(item => item.tableno !== consolidatedBill.tableNo);
+      cartItems = cartItems.filter(
+        item => item.tableno !== consolidatedBill.tableNo,
+      );
       await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
-      
+
       navigation.goBack();
     } catch (error) {
       //console.error('Printing error:', error);
@@ -342,11 +389,16 @@ ${itemsText}
 
   const renderDeviceItem = ({ item }: { item: IBLEPrinter }) => (
     <TouchableOpacity
-      style={[styles.deviceItem, isPotentialPrinter(item) && styles.printerDeviceItem]}
+      style={[
+        styles.deviceItem,
+        isPotentialPrinter(item) && styles.printerDeviceItem,
+      ]}
       onPress={() => selectAndConnectPrinter(item)}
     >
       <View style={styles.deviceInfo}>
-        <Text style={styles.deviceName}>{item.device_name || 'Unnamed Device'}</Text>
+        <Text style={styles.deviceName}>
+          {item.device_name || 'Unnamed Device'}
+        </Text>
         {isPotentialPrinter(item) && (
           <Text style={styles.printerLabel}>Thermal Printer</Text>
         )}
@@ -372,13 +424,16 @@ ${itemsText}
             </TouchableOpacity>
           </View>
           <Text style={styles.modalSubtitle}>
-            {isScanning ? 'Scanning for devices...' : 'Select a device to connect'}
+            {isScanning
+              ? 'Scanning for devices...'
+              : 'Select a device to connect'}
           </Text>
           {devices.length === 0 && !isScanning && (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>No devices found</Text>
               <Text style={styles.emptySubtext}>
-                Ensure Bluetooth is enabled and your thermal printer is turned on and paired.
+                Ensure Bluetooth is enabled and your thermal printer is turned
+                on and paired.
               </Text>
             </View>
           )}
@@ -414,7 +469,8 @@ ${itemsText}
       </TouchableOpacity>
       <Text style={styles.title}>Bill Details</Text>
       <Text style={styles.subtitle}>
-        Table No: {consolidatedBill.tableNo} | User ID: {consolidatedBill.userId}
+        Table No: {consolidatedBill.tableNo} | User ID:{' '}
+        {consolidatedBill.userId}
       </Text>
       <View style={styles.statusRow}>
         <View
@@ -459,7 +515,10 @@ ${itemsText}
         {renderHeader()}
         {consolidatedBill?.items?.map((item: any, index: any) => (
           <View key={index} style={styles.billCard}>
-            <LinearGradient colors={['#333', '#222']} style={styles.cardGradient}>
+            <LinearGradient
+              colors={['#333', '#222']}
+              style={styles.cardGradient}
+            >
               <View style={styles.cartItemImageRow}>
                 {item?.item_image ? (
                   <Image
@@ -470,7 +529,9 @@ ${itemsText}
                   <View style={styles.cartItemImagePlaceholder} />
                 )}
                 <View style={styles.cartItemNameCol}>
-                  <Text style={styles.cartItemName}>{item?.name || 'Unknown'}</Text>
+                  <Text style={styles.cartItemName}>
+                    {item?.name || 'Unknown'}
+                  </Text>
                 </View>
               </View>
               <View style={styles.cartItemContent}>
@@ -488,11 +549,15 @@ ${itemsText}
                 </View>
                 <View style={styles.cartItemRow}>
                   <Text style={styles.cartItemLabel}>Price:</Text>
-                  <Text style={styles.cartItemPrice}>₹{item?.product_price}</Text>
+                  <Text style={styles.cartItemPrice}>
+                    ₹{item?.product_price}
+                  </Text>
                 </View>
                 <View style={styles.cartItemRow}>
                   <Text style={styles.cartItemLabel}>Total:</Text>
-                  <Text style={styles.cartItemTotal}>₹{item?.total_amount}</Text>
+                  <Text style={styles.cartItemTotal}>
+                    ₹{item?.total_amount}
+                  </Text>
                 </View>
               </View>
             </LinearGradient>
@@ -500,16 +565,21 @@ ${itemsText}
         ))}
         <View style={styles.totalContainer}>
           <Text style={styles.totalLabel}>Total Amount</Text>
-          <Text style={styles.totalAmount}>₹{consolidatedBill.totalAmount}</Text>
+          <Text style={styles.totalAmount}>
+            ₹{consolidatedBill.totalAmount}
+          </Text>
         </View>
-        
+
         {/* Action Buttons Container */}
         <View style={styles.actionButtonsContainer}>
           {/* Top Row */}
           <View style={styles.buttonRow}>
             {/* Print Button */}
             <TouchableOpacity
-              style={[styles.primaryButton, isPrinting && styles.disabledButton]}
+              style={[
+                styles.primaryButton,
+                isPrinting && styles.disabledButton,
+              ]}
               onPress={handlePrintBill}
               disabled={isPrinting}
               accessibilityRole="button"
