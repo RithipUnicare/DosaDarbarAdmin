@@ -19,6 +19,7 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { addCard } from '../Services/ApiServices.js';
 
 const { width } = Dimensions.get('window');
 
@@ -46,7 +47,10 @@ export interface CartItemType {
   item_image?: string;
 }
 
-type ProductSelectionScreenProps = StackScreenProps<RootStackParamList, 'Product'>;
+type ProductSelectionScreenProps = StackScreenProps<
+  RootStackParamList,
+  'Product'
+>;
 
 const CART_STORAGE_KEY = 'cartItems';
 
@@ -59,9 +63,12 @@ const ProductSelectionScreen: React.FC<ProductSelectionScreenProps> = ({
   const [loading, setLoading] = useState<boolean>(true);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [quantity, setQuantity] = useState<number>(1);
-  const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(null);
+  const [selectedProduct, setSelectedProduct] = useState<ProductType | null>(
+    null,
+  );
 
-  const GET_PRODUCT_API = 'http://unitech.agency/Dosadharbar/api/v1/get_AllproductDetails';
+  const GET_PRODUCT_API =
+    'http://unitech.agency/Dosadharbar/api/v1/get_AllproductDetails';
   const IMAGE_BASE_URL = 'http://unitech.agency/Dosadharbar/api/v1/images/';
 
   useEffect(() => {
@@ -99,7 +106,9 @@ const ProductSelectionScreen: React.FC<ProductSelectionScreenProps> = ({
 
   const handleAddToCart = async (product: ProductType) => {
     if (quantity <= 0) {
-      Alert.alert('Validation', 'Please enter a valid quantity.', [{ text: 'OK' }]);
+      Alert.alert('Validation', 'Please enter a valid quantity.', [
+        { text: 'OK' },
+      ]);
       return;
     }
 
@@ -109,7 +118,9 @@ const ProductSelectionScreen: React.FC<ProductSelectionScreenProps> = ({
       category_id: product.category_id,
       product_price: product.prices,
       quantity: quantity,
-      total_amount: (parseFloat(product.prices.toString()) * quantity).toFixed(2),
+      total_amount: (parseFloat(product.prices.toString()) * quantity).toFixed(
+        2,
+      ),
       user_id,
       tableno,
       name: product.name,
@@ -120,7 +131,21 @@ const ProductSelectionScreen: React.FC<ProductSelectionScreenProps> = ({
       const stored = await AsyncStorage.getItem(CART_STORAGE_KEY);
       const existingItems: CartItemType[] = stored ? JSON.parse(stored) : [];
       const updatedItems = [...existingItems, cartItem];
-      await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(updatedItems));
+      //console.log(updatedItems);
+      //await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(updatedItems));
+      for (let product of updatedItems) {
+        const postData = {
+          product_id: product.product_id,
+          category_id: product.category_id,
+          product_price: Number(product.product_price),
+          quantity: Number(product.quantity),
+          total_amount: Number(product.total_amount),
+          tableno: Number(product.tableno),
+          edit_id: 0,
+        };
+        const response = await addCard(postData);
+        console.log(response);
+      }
       Alert.alert('Success', 'Item added to cart!', [{ text: 'OK' }]);
       setQuantity(1);
       setSelectedProduct(null);
@@ -148,7 +173,9 @@ const ProductSelectionScreen: React.FC<ProductSelectionScreenProps> = ({
           )}
         </View>
         <View style={styles.productInfo}>
-          <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
+          <Text style={styles.productName} numberOfLines={2}>
+            {item.name}
+          </Text>
           <Text style={styles.productPrice}>₹{item.prices}</Text>
         </View>
       </LinearGradient>
@@ -184,7 +211,7 @@ const ProductSelectionScreen: React.FC<ProductSelectionScreenProps> = ({
         <Text style={styles.title}>Select Products</Text>
         <Text style={styles.subtitle}>Table No: {tableno}</Text>
       </View>
-      
+
       <View style={styles.searchContainer}>
         <TextInput
           style={styles.searchInput}
@@ -194,28 +221,30 @@ const ProductSelectionScreen: React.FC<ProductSelectionScreenProps> = ({
           onChangeText={setSearchQuery}
         />
       </View>
-      
+
       {selectedProduct && (
         <View style={styles.selectionContainer}>
           <Text style={styles.selectedProductName}>{selectedProduct.name}</Text>
-          <Text style={styles.selectedProductPrice}>₹{selectedProduct.prices}</Text>
-          
+          <Text style={styles.selectedProductPrice}>
+            ₹{selectedProduct.prices}
+          </Text>
+
           <View style={styles.quantityContainer}>
             <Text style={styles.quantityLabel}>Quantity:</Text>
             <View style={styles.quantityControls}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.quantityButton}
                 onPress={decreaseQuantity}
                 activeOpacity={0.7}
               >
                 <Text style={styles.quantityButtonText}>-</Text>
               </TouchableOpacity>
-              
+
               <View style={styles.quantityDisplay}>
                 <Text style={styles.quantityText}>{quantity}</Text>
               </View>
-              
-              <TouchableOpacity 
+
+              <TouchableOpacity
                 style={styles.quantityButton}
                 onPress={increaseQuantity}
                 activeOpacity={0.7}
@@ -224,7 +253,7 @@ const ProductSelectionScreen: React.FC<ProductSelectionScreenProps> = ({
               </TouchableOpacity>
             </View>
           </View>
-          
+
           <TouchableOpacity
             style={styles.addButton}
             onPress={() => handleAddToCart(selectedProduct)}
@@ -233,7 +262,7 @@ const ProductSelectionScreen: React.FC<ProductSelectionScreenProps> = ({
           </TouchableOpacity>
         </View>
       )}
-      
+
       <FlatList
         data={filteredProducts}
         renderItem={renderProductItem}

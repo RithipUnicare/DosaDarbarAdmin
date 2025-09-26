@@ -28,6 +28,7 @@ import {
 } from 'react-native-thermal-receipt-printer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import dayjs from 'dayjs';
+import { submitBill } from '../Services/ApiServices';
 
 const { width } = Dimensions.get('window');
 
@@ -274,6 +275,44 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
       );
       return;
     }
+    console.log(consolidatedBill);
+    // const billData = {
+    //   items: consolidatedBill.items.map((item: CartItemType) => ({
+    //     product_id: Number(item.product_id),
+    //     category_id: Number(item.category_id),
+    //     product_price: Number(item.product_price),
+    //     quantity: Number(item.quantity),
+    //     total_amount: Number(item.total_amount),
+    //     user_id: "Admin",
+    //     tableno: Number(consolidatedBill.tableNo),
+    //   })),
+    //   total_amount: consolidatedBill.totalAmount,
+    //   user_id: consolidatedBill.userId,
+    //   table_no: consolidatedBill.tableNo,
+    //   bill_no: Math.floor(Math.random() * 10000).toString(),
+    //   order_date: new Date().toISOString(),
+    // };
+    // const response = await submitBill(billData);
+    // console.log(response);
+    // if (!response.ok) {
+    //   //console.error('Failed to submit bill:', response.error);
+    //   Alert.alert('Error', 'Bill was printed but could not be saved to server');
+    // }
+
+    consolidatedBill.items.map(async (item: CartItemType) => {
+      console.log(item);
+      const postData = {
+        product_id: Number(item.product_id),
+        category_id: Number(item.category_id),
+        product_price: Number(item.product_price),
+        quantity: Number(item.quantity),
+        total_amount: Number(item.total_amount),
+        user_id: 'Admin',
+        tableno: Number(consolidatedBill.tableNo),
+      };
+      const response = await submitBill(postData);
+      console.log(response);
+    });
     if (!bluetoothEnabled) {
       Alert.alert('Bluetooth Disabled', 'Please enable Bluetooth first.');
       return;
@@ -334,7 +373,7 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
 ${itemsText}
 <C>============================</C>
 <L>Total Quantity: ${totalQuantity}</L>
-<L>Total Amount: ₹${consolidatedBill.totalAmount}</L>
+<L>Total Amount: Rs.${consolidatedBill.totalAmount}</L>
 <C>============================</C>
 <C>Thank you! Visit Again!</C>
 <C>============================</C>
@@ -342,6 +381,9 @@ ${itemsText}
       `;
 
       await BLEPrinter.printText(printText);
+
+      // Submit bill data to the server
+
       await saveOrderToHistory();
 
       // Clear the cart after successful print

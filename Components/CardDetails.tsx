@@ -19,7 +19,8 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { BASE_URL, endPoints } from '../Services/Configuration';
+import { addCard, updateCard, deleteCard } from '../Services/ApiServices';
 
 const { width } = Dimensions.get('window');
 
@@ -35,7 +36,7 @@ interface CartItemType {
   tableno: string | number;
   name?: string;
   item_image?: string;
-  served?: boolean; // Added to track served status
+  served?: boolean;
 }
 
 interface ConsolidatedBillType {
@@ -50,15 +51,16 @@ interface CartDetailsScreenProps {
   route: { params?: { user_id?: string; tableno?: string } };
 }
 
-const CART_STORAGE_KEY = 'cartItems';
-const GET_CART_API = 'http://unitech.agency/Dosadharbar/api/v1/get_cart_detailsAdmin';
-const IMAGE_BASE_URL = 'http://unitech.agency/Dosadharbar/api/v1/images/';
+const GET_CART_API = `${BASE_URL}/get_cart_detailsAdmin`;
+const IMAGE_BASE_URL = `${BASE_URL}/images/`;
 
 const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
   navigation,
   route,
 }) => {
-  const [groupedByTable, setGroupedByTable] = useState<{ [key: string]: CartItemType[] }>({});
+  const [groupedByTable, setGroupedByTable] = useState<{
+    [key: string]: CartItemType[];
+  }>({});
   const [sortedTableNumbers, setSortedTableNumbers] = useState<string[]>([]);
   const [cartItems, setCartItems] = useState<CartItemType[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -66,74 +68,55 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
   const [showTableModal, setShowTableModal] = useState<boolean>(false);
   const [newTableNo, setNewTableNo] = useState<string>('');
   const [userId, setUserId] = useState<string>(route.params?.user_id || '999');
-  const [tableNo, setTableNo] = useState<string>('');//route.params?.tableno || 
+  const [tableNo, setTableNo] = useState<string>('');
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
       loadCartAndFetchOrders();
     });
-    
-    // Initial load
+
     loadCartAndFetchOrders();
-    
-    // Clean up the event listener
+
     return unsubscribe;
   }, [navigation, userId]);
-  useEffect(()=>{
-    if(tableNo){
+
+  useEffect(() => {
+    if (tableNo) {
       loadCartAndFetchOrders();
     }
-  },[tableNo])
+  }, [tableNo]);
 
   const loadCartAndFetchOrders = async () => {
     try {
       setLoading(true);
-      // Load local cart
-      const stored = await AsyncStorage.getItem(CART_STORAGE_KEY);
-      let localItems: CartItemType[] = stored ? JSON.parse(stored) : [];
-      
 
       // Fetch server orders
       const response = await fetch(GET_CART_API);
-      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
-      // const data = await response.json();
-      
-      // const serverItems: CartItemType[] = data?.Item?.filter((item: any) => item.tableno && item.quantity).map((item: any) => ({
-      //   id: item.id || `server_${item.id}`,
-      //   product_id: item.id,
-      //   category_id: item.category_id,
-      //   product_price: item.prices,
-      //   quantity: item.quantity,
-      //   total_amount: (parseFloat(item.prices) * parseInt(item.quantity)).toFixed(2),
-      //   user_id: userId,
-      //   tableno: item.tableno,
-      //   name: item.name,
-      //   item_image: item.item_image,
-      //   served: false,
-      // }));
-      
-      // Merge server items with local items, prioritizing server items
-      const mergedItems: CartItemType[] = [];//[...serverItems];
-      localItems?.forEach(localItem => {
-        const existing = mergedItems.find(
-          item => item.product_id === localItem.product_id && item.tableno === localItem.tableno
-        );
-        if (existing) {
-          // Update quantity and total if exists
-          const newQuantity = parseInt(existing.quantity as string) + parseInt(localItem.quantity as string);
-          existing.quantity = newQuantity;
-          existing.total_amount = (parseFloat(existing.product_price as string) * newQuantity).toFixed(2);
-        } else {
-          mergedItems.push(localItem);
-        }
-      });
+      const data = await response.json();
 
-      // Group items by table number
+      const serverItems: CartItemType[] = data?.Item?.filter(
+        (item: any) => item.tableno && item.quantity,
+      ).map((item: any) => ({
+        id: item.id || `${item.id}`,
+        product_id: item.id,
+        category_id: item.category_id,
+        product_price: item.prices,
+        quantity: item.quantity,
+        total_amount: (
+          parseFloat(item.prices) * parseInt(item.quantity)
+        ).toFixed(2),
+        user_id: userId,
+        tableno: item.tableno,
+        name: item.name,
+        item_image: item.item_image,
+        served: false,
+      }));
+
       const grouped: { [key: string]: CartItemType[] } = {};
-      mergedItems?.forEach(item => {
+      serverItems.forEach(item => {
         if (item.tableno) {
           const table = item.tableno.toString();
           if (!grouped[table]) {
@@ -143,25 +126,20 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
         }
       });
 
-      // Sort table numbers
       const sorted = Object.keys(grouped).sort((a, b) => Number(a) - Number(b));
 
-      setCartItems(mergedItems);
+      setCartItems(serverItems);
       setGroupedByTable(grouped);
       setSortedTableNumbers(sorted);
 
-      // Set default table if none selected and tables exist
-      if (!tableNo && sorted?.length > 0) {
+      if (!tableNo && sorted.length > 0) {
         setTableNo(sorted[0]);
       }
-
-      // Save merged items to AsyncStorage
-      await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(mergedItems));
     } catch (error) {
-      console.error('Failed to load cart or orders:', error);
+      console.error('Failed to load orders:', error);
       Alert.alert(
         'Error',
-        'Failed to load cart or orders. Please check your internet connection.',
+        'Failed to load orders. Please check your internet connection.',
         [{ text: 'OK' }],
       );
     } finally {
@@ -170,22 +148,10 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
   };
 
   useEffect(() => {
-    // Show table modal if no tables exist
     if (sortedTableNumbers.length === 0 && !tableNo && !showTableModal) {
       setShowTableModal(true);
     }
   }, [sortedTableNumbers, tableNo, showTableModal]);
-
-  useEffect(() => {
-    const saveCart = async () => {
-      try {
-        await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
-      } catch (error) {
-        console.error('Failed to save cart to storage:', error);
-      }
-    };
-    saveCart();
-  }, [cartItems]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -193,26 +159,36 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
     setRefreshing(false);
   };
 
-  const updateCartQuantity = (item: CartItemType, newQuantity: number) => {
+  const updateCartQuantity = async (
+    item: CartItemType,
+    newQuantity: number,
+  ) => {
     if (newQuantity < 1) return;
     try {
       const parsedPrice = parseFloat(item.product_price as string);
       if (isNaN(parsedPrice)) {
         throw new Error('Invalid product price');
       }
+
+      const updatedItem = {
+        ...item,
+        quantity: newQuantity,
+        total_amount: (parsedPrice * newQuantity).toFixed(2),
+      };
+
+      const response = await updateCard(updatedItem);
+      if (!response.ok) {
+        throw new Error('Failed to update cart item');
+      }
+
       const updatedCartItems = cartItems.map(cartItem =>
         cartItem.product_id === item.product_id &&
         cartItem.user_id === item.user_id &&
         cartItem.tableno === item.tableno
-          ? {
-              ...cartItem,
-              quantity: newQuantity,
-              total_amount: (parsedPrice * newQuantity).toFixed(2),
-            }
-          : cartItem
+          ? updatedItem
+          : cartItem,
       );
 
-      // Update groupedByTable to reflect quantity changes
       const grouped: { [key: string]: CartItemType[] } = {};
       updatedCartItems.forEach(updatedItem => {
         if (updatedItem.tableno) {
@@ -232,7 +208,7 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
     }
   };
 
-  const handleDeleteItem = (item: CartItemType) => {
+  const handleDeleteItem = async (item: CartItemType) => {
     Alert.alert(
       'Delete Item',
       'Are you sure you want to delete this item from the cart?',
@@ -241,72 +217,53 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: () => {
-            const updatedCartItems = cartItems.filter(
-              i => !(i.product_id === item.product_id && i.tableno === item.tableno)
-            );
-            // Update groupedByTable after deletion
-            const grouped: { [key: string]: CartItemType[] } = {};
-            updatedCartItems.forEach(updatedItem => {
-              if (updatedItem.tableno) {
-                const table = updatedItem.tableno.toString();
-                if (!grouped[table]) {
-                  grouped[table] = [];
-                }
-                grouped[table].push(updatedItem);
+          onPress: async () => {
+            try {
+              const response = await deleteCard(item.id);
+              if (!response.ok) {
+                throw new Error('Failed to delete cart item');
               }
-            });
-            const sorted = Object.keys(grouped).sort((a, b) => Number(a) - Number(b));
-            setCartItems(updatedCartItems);
-            setGroupedByTable(grouped);
-            setSortedTableNumbers(sorted);
-            // If current table has no items, select first available table or show modal
-            if (!grouped[tableNo] && sorted.length > 0) {
-              setTableNo(sorted[0]);
-            } else if (!grouped[tableNo] && sorted.length === 0) {
-              setTableNo('');
-              setShowTableModal(true);
+
+              const updatedCartItems = cartItems.filter(
+                i =>
+                  !(
+                    i.product_id === item.product_id &&
+                    i.tableno === item.tableno
+                  ),
+              );
+
+              const grouped: { [key: string]: CartItemType[] } = {};
+              updatedCartItems.forEach(updatedItem => {
+                if (updatedItem.tableno) {
+                  const table = updatedItem.tableno.toString();
+                  if (!grouped[table]) {
+                    grouped[table] = [];
+                  }
+                  grouped[table].push(updatedItem);
+                }
+              });
+              const sorted = Object.keys(grouped).sort(
+                (a, b) => Number(a) - Number(b),
+              );
+
+              setCartItems(updatedCartItems);
+              setGroupedByTable(grouped);
+              setSortedTableNumbers(sorted);
+
+              if (!grouped[tableNo] && sorted.length > 0) {
+                setTableNo(sorted[0]);
+              } else if (!grouped[tableNo] && sorted.length === 0) {
+                setTableNo('');
+                setShowTableModal(true);
+              }
+            } catch (error) {
+              console.error('Error deleting item:', error);
+              Alert.alert('Error', 'Failed to delete item. Please try again.');
             }
           },
         },
-      ]
+      ],
     );
-  };
-
-  const handlePrintBill = () => {
-    if (!tableNo) {
-      Alert.alert('Error', 'Please select a table number first.', [{ text: 'OK' }]);
-      return;
-    }
-    const itemsForTable = groupedByTable[tableNo] || [];
-    const totalAmount = itemsForTable
-      .reduce((sum, item) => sum + parseFloat(item.total_amount as string), 0)
-      .toFixed(2);
-    const consolidatedBill: ConsolidatedBillType = {
-      items: itemsForTable,
-      totalAmount,
-      userId,
-      tableNo,
-    };
-    navigation.navigate('BillScreen', { consolidatedBill });
-  };
-
-  const handleSendToKitchen = () => {
-    if (!tableNo) {
-      Alert.alert('Error', 'Please select a table number first.', [{ text: 'OK' }]);
-      return;
-    }
-    const unservedItems = (groupedByTable[tableNo] || []).filter(item => !item.served);
-    if (unservedItems.length === 0) {
-      Alert.alert('No Items', 'No unserved items to send to kitchen.');
-      return;
-    }
-    const kitchenOrder = {
-      items: unservedItems,
-      tableNo,
-      userId,
-    };
-    navigation.navigate('KitchenScreen', { kitchenOrder });
   };
 
   const handleClearTable = async () => {
@@ -314,7 +271,7 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
       Alert.alert('Error', 'Please select a table to clear.', [{ text: 'OK' }]);
       return;
     }
-  
+
     Alert.alert(
       'Clear Table',
       `Are you sure you want to clear all items from Table ${tableNo}?`,
@@ -325,112 +282,81 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
           style: 'destructive',
           onPress: async () => {
             try {
-              // Remove items from local storage
-              const stored = await AsyncStorage.getItem(CART_STORAGE_KEY);
-              let localItems: CartItemType[] = stored ? JSON.parse(stored) : [];
-  
-              // Filter out items for the current table (ensure type coercion)
-              const updatedItems = localItems.filter(
-                item => String(item.tableno) !== String(tableNo)
+              const itemsToDelete = groupedByTable[tableNo] || [];
+              for (const item of itemsToDelete) {
+                const response = await deleteCard(item.id);
+                if (!response.ok) {
+                  throw new Error(`Failed to delete item ${item.id}`);
+                }
+              }
+
+              const updatedCartItems = cartItems.filter(
+                item => String(item.tableno) !== String(tableNo),
               );
-  
-              // Save the updated items back to local storage
-              await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(updatedItems));
-  
-              // Update the UI
+
               const updatedGrouped = { ...groupedByTable };
               delete updatedGrouped[tableNo];
-              const updatedTableNumbers = sortedTableNumbers.filter(num => num !== tableNo);
-  
+              const updatedTableNumbers = sortedTableNumbers.filter(
+                num => num !== tableNo,
+              );
+
+              setCartItems(updatedCartItems);
               setGroupedByTable(updatedGrouped);
               setSortedTableNumbers(updatedTableNumbers);
-  
-              // Select the first available table or clear selection
+
               if (updatedTableNumbers.length > 0) {
                 setTableNo(updatedTableNumbers[0]);
               } else {
                 setTableNo('');
-                setShowTableModal(true); // Show modal if no tables remain
+                setShowTableModal(true);
               }
-  
-              // TODO: Implement server-side deletion (replace with your API endpoint)
-              try {
-                const response = await fetch('YOUR_DELETE_TABLE_API_ENDPOINT', {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                  },
-                  body: JSON.stringify({
-                    tableNo,
-                    userId,
-                  }),
-                });
-                if (!response.ok) {
-                  throw new Error(`Failed to clear table on server: ${response.status}`);
-                }
-              } catch (serverError) {
-                console.warn('Server-side deletion failed:', serverError);
-                // Optionally notify user but proceed with local changes
-                Alert.alert(
-                  'Warning',
-                  'Table cleared locally, but server sync failed. Please try again later.',
-                  [{ text: 'OK' }]
-                );
-              }
-  
+
               Alert.alert('Success', `Table ${tableNo} has been cleared.`);
-            } catch (error) {
+            } catch (error: any) {
               console.error('Error clearing table:', error);
               Alert.alert(
                 'Error',
-                `Failed to clear the table: ${error.message || 'Unknown error'}. Please try again.`,
-                [{ text: 'OK' }]
+                `Failed to clear the table: ${
+                  error.message || 'Unknown error'
+                }. Please try again.`,
+                [{ text: 'OK' }],
               );
             }
           },
         },
-      ]
+      ],
     );
   };
-  
-  // Move isMounted logic to useEffect for proper cleanup
-  useEffect(() => {
-    let isMounted = true;
-  
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-  
-  // Move isMounted logic to useEffect for proper cleanup
-  useEffect(() => {
-    let isMounted = true;
-  
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   const handleSelectTable = () => {
     if (!newTableNo.trim()) {
-      Alert.alert('Validation', 'Please enter a table number.', [{ text: 'OK' }]);
+      Alert.alert('Validation', 'Please enter a table number.', [
+        { text: 'OK' },
+      ]);
       return;
     }
     if (sortedTableNumbers.includes(newTableNo)) {
-      Alert.alert('Error', 'Table number already exists. Select it from the list.', [{ text: 'OK' }]);
+      Alert.alert(
+        'Error',
+        'Table number already exists. Select it from the list.',
+        [{ text: 'OK' }],
+      );
       return;
     }
-    // Add empty group for new table to show immediately
-    setGroupedByTable({...groupedByTable, [newTableNo]: []});
-    setSortedTableNumbers([...sortedTableNumbers, newTableNo].sort((a, b) => Number(a) - Number(b)));
+    setGroupedByTable({ ...groupedByTable, [newTableNo]: [] });
+    setSortedTableNumbers(
+      [...sortedTableNumbers, newTableNo].sort((a, b) => Number(a) - Number(b)),
+    );
     setTableNo(newTableNo);
     setShowTableModal(false);
     setNewTableNo('');
   };
 
-  const handleAddProduct = () => {
+  const handleAddProduct = async () => {
     if (!tableNo) {
-      Alert.alert('Error', 'Please select or create a table number first.', [{ text: 'OK' }]);
+      Alert.alert('Error', 'Please select or create a table number first.', [
+        { text: 'OK' },
+      ]);
       setShowTableModal(true);
       return;
     }
@@ -446,14 +372,24 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
             <View style={styles.buttonGroupFixed}>
               <TouchableOpacity
                 style={styles.quantityButton}
-                onPress={() => updateCartQuantity(item, parseInt(item.quantity as string) - 1)}
+                onPress={() =>
+                  updateCartQuantity(
+                    item,
+                    parseInt(item.quantity as string) - 1,
+                  )
+                }
               >
                 <Text style={styles.cartItemValue}>-</Text>
               </TouchableOpacity>
               <Text style={styles.cartItemValue}>{item.quantity}</Text>
               <TouchableOpacity
                 style={styles.quantityButton}
-                onPress={() => updateCartQuantity(item, parseInt(item.quantity as string) + 1)}
+                onPress={() =>
+                  updateCartQuantity(
+                    item,
+                    parseInt(item.quantity as string) + 1,
+                  )
+                }
               >
                 <Text style={styles.cartItemValue}>+</Text>
               </TouchableOpacity>
@@ -562,7 +498,10 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
           <Text style={styles.statValue}>
             ₹
             {(groupedByTable[tableNo] || [])
-              .reduce((sum, item) => sum + parseFloat(item.total_amount as string), 0)
+              .reduce(
+                (sum, item) => sum + parseFloat(item.total_amount as string),
+                0,
+              )
               .toFixed(2)}
           </Text>
           <Text style={styles.statLabel}>Total</Text>
@@ -608,14 +547,26 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
           <Icon name="add" size={24} color="#fff" />
         </TouchableOpacity>
       </View>
-      <ScrollView horizontal style={styles.tableSelectorContainer} showsHorizontalScrollIndicator={false}>
-        {sortedTableNumbers.map((num) => (
+      <ScrollView
+        horizontal
+        style={styles.tableSelectorContainer}
+        showsHorizontalScrollIndicator={false}
+      >
+        {sortedTableNumbers.map(num => (
           <TouchableOpacity
             key={num}
-            style={[styles.tableNumberButton, num === tableNo && styles.tableNumberButtonActive]}
+            style={[
+              styles.tableNumberButton,
+              num === tableNo && styles.tableNumberButtonActive,
+            ]}
             onPress={() => setTableNo(num)}
           >
-            <Text style={[styles.tableNumberText, num === tableNo && styles.tableNumberTextActive]}>
+            <Text
+              style={[
+                styles.tableNumberText,
+                num === tableNo && styles.tableNumberTextActive,
+              ]}
+            >
               Table {num}
             </Text>
           </TouchableOpacity>
@@ -640,6 +591,48 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
     </View>
   );
 
+  const handlePrintBill = () => {
+    if (!tableNo) {
+      Alert.alert('Error', 'Please select a table number first.', [
+        { text: 'OK' },
+      ]);
+      return;
+    }
+    const itemsForTable = groupedByTable[tableNo] || [];
+    const totalAmount = itemsForTable
+      .reduce((sum, item) => sum + parseFloat(item.total_amount as string), 0)
+      .toFixed(2);
+    const consolidatedBill: ConsolidatedBillType = {
+      items: itemsForTable,
+      totalAmount,
+      userId,
+      tableNo,
+    };
+    navigation.navigate('BillScreen', { consolidatedBill });
+  };
+
+  const handleSendToKitchen = () => {
+    if (!tableNo) {
+      Alert.alert('Error', 'Please select a table number first.', [
+        { text: 'OK' },
+      ]);
+      return;
+    }
+    const unservedItems = (groupedByTable[tableNo] || []).filter(
+      item => !item.served,
+    );
+    if (unservedItems.length === 0) {
+      Alert.alert('No Items', 'No unserved items to send to kitchen.');
+      return;
+    }
+    const kitchenOrder = {
+      items: unservedItems,
+      tableNo,
+      userId,
+    };
+    navigation.navigate('KitchenScreen', { kitchenOrder });
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -659,7 +652,9 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
       <FlatList
         data={groupedByTable[tableNo] || []}
         renderItem={renderCartItem}
-        keyExtractor={item => item.id?.toString() || `${item.product_id}-${item.tableno}`}
+        keyExtractor={item =>
+          item.id?.toString() || `${item.product_id}-${item.tableno}`
+        }
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmptyComponent}
         contentContainerStyle={styles.listContainer}
@@ -806,9 +801,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     textAlign: 'center',
-  },
-  clearButtonDisabled: {
-    opacity: 0.5,
   },
   tableSelectorHeader: {
     flexDirection: 'row',
