@@ -6,7 +6,6 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
   ActivityIndicator,
   Dimensions,
@@ -25,6 +24,7 @@ import {
   getItemWiseReport,
   getBillWiseReport,
 } from '../Services/ApiServices';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
@@ -185,13 +185,13 @@ const ReportScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const processAllOrders = (allOrders: OrderItemType[]) => {
     const startOfDay = dayjs(fromDate).startOf('day');
     const endOfDay = dayjs(toDate).endOf('day');
-
+    console.log(startOfDay, endOfDay);
     // Filter orders for the date range
     const filteredOrders = allOrders.filter(order => {
       const orderDate = dayjs(order.date);
       return orderDate.isAfter(startOfDay) && orderDate.isBefore(endOfDay);
     });
-
+    console.log(filteredOrders);
     // Group orders by table number and date
     const groupedOrders = filteredOrders.reduce((acc, order) => {
       const key = `${order.tableno}-${order.date}`;

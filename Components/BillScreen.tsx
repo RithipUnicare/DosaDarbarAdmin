@@ -28,7 +28,7 @@ import {
 } from 'react-native-thermal-receipt-printer';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import dayjs from 'dayjs';
-import { submitBill } from '../Services/ApiServices';
+import { deleteCard } from '../Services/ApiServices';
 
 const { width } = Dimensions.get('window');
 
@@ -275,55 +275,17 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
       );
       return;
     }
-    console.log(consolidatedBill);
-    // const billData = {
-    //   items: consolidatedBill.items.map((item: CartItemType) => ({
-    //     product_id: Number(item.product_id),
-    //     category_id: Number(item.category_id),
-    //     product_price: Number(item.product_price),
-    //     quantity: Number(item.quantity),
-    //     total_amount: Number(item.total_amount),
-    //     user_id: "Admin",
-    //     tableno: Number(consolidatedBill.tableNo),
-    //   })),
-    //   total_amount: consolidatedBill.totalAmount,
-    //   user_id: consolidatedBill.userId,
-    //   table_no: consolidatedBill.tableNo,
-    //   bill_no: Math.floor(Math.random() * 10000).toString(),
-    //   order_date: new Date().toISOString(),
-    // };
-    // const response = await submitBill(billData);
-    // console.log(response);
-    // if (!response.ok) {
-    //   //console.error('Failed to submit bill:', response.error);
-    //   Alert.alert('Error', 'Bill was printed but could not be saved to server');
-    // }
-
-    consolidatedBill.items.map(async (item: CartItemType) => {
-      console.log(item);
-      const postData = {
-        product_id: Number(item.product_id),
-        category_id: Number(item.category_id),
-        product_price: Number(item.product_price),
-        quantity: Number(item.quantity),
-        total_amount: Number(item.total_amount),
-        user_id: 'Admin',
-        tableno: Number(consolidatedBill.tableNo),
-      };
-      const response = await submitBill(postData);
-      console.log(response);
-    });
     if (!bluetoothEnabled) {
       Alert.alert('Bluetooth Disabled', 'Please enable Bluetooth first.');
       return;
     }
-    if (!isConnected) {
-      Alert.alert(
-        'Not Connected',
-        'Please select and connect to a printer first.',
-      );
-      return;
-    }
+    // if (!isConnected) {
+    //   Alert.alert(
+    //     'Not Connected',
+    //     'Please select and connect to a printer first.',
+    //   );
+    //   return;
+    // }
     if (!consolidatedBill?.items?.length) {
       Alert.alert('No Items', 'No items available to print.');
       return;
@@ -332,12 +294,12 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
     setIsPrinting(true);
     try {
       const totalQuantity = consolidatedBill?.items?.reduce(
-        (sum, item) => sum + (parseInt(item.quantity as string) || 0),
+        (sum:any, item:any) => sum + (parseInt(item.quantity as string) || 0),
         0,
       );
 
       const itemsText = consolidatedBill.items
-        .map((item, index) => {
+        .map((item:any, index:any) => {
           const srNo = `${(index + 1).toString().padStart(2, '0')}.`;
           const itemName = (item.name || 'N/A')
             .substring(0, 12)
@@ -381,9 +343,6 @@ ${itemsText}
       `;
 
       await BLEPrinter.printText(printText);
-
-      // Submit bill data to the server
-
       await saveOrderToHistory();
 
       // Clear the cart after successful print
@@ -393,17 +352,17 @@ ${itemsText}
         console.error('Error clearing cart:', error);
       }
       Alert.alert('Success', 'Bill printed successfully!');
-      // Clear cart for this table after printing
       const storedCart = await AsyncStorage.getItem(CART_STORAGE_KEY);
       let cartItems: CartItemType[] = storedCart ? JSON.parse(storedCart) : [];
       cartItems = cartItems.filter(
         item => item.tableno !== consolidatedBill.tableNo,
       );
       await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
-
+      for (const item of consolidatedBill.items) {
+        await deleteCard(item.id);
+      }
       navigation.goBack();
     } catch (error) {
-      //console.error('Printing error:', error);
       Alert.alert('Error', 'Failed to print bill. Please try again.');
     } finally {
       setIsPrinting(false);
@@ -564,7 +523,7 @@ ${itemsText}
               <View style={styles.cartItemImageRow}>
                 {item?.item_image ? (
                   <Image
-                    source={{ uri: `${IMAGE_BASE_URL}${item?.item_image}` }}
+                    source={{ uri: `${IMAGE_BASE_URL}${item?.item_image}`}}
                     style={styles.cartItemImage}
                   />
                 ) : (

@@ -96,7 +96,6 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
-
       const serverItems: CartItemType[] = data?.Item?.filter(
         (item: any) => item.tableno && item.quantity,
       ).map((item: any) => ({

@@ -42,6 +42,7 @@ export const updateCard = async data => {
 
 export const deleteCard = async id => {
   try {
+    console.log('Deleting card with id:', endPoints.deleteCard(id));
     const response = await fetch(endPoints.deleteCard(id), {
       method: 'DELETE',
       headers: getHeaders(),
@@ -49,7 +50,7 @@ export const deleteCard = async id => {
     const responseData = await response.json();
     return { ok: response.ok, data: responseData };
   } catch (error) {
-    console.error('Delete card error:', error);
+    //console.error('Delete card error:', error);
     Alert.alert('Error', 'Failed to delete card');
     return { ok: false, error };
   }
@@ -152,9 +153,10 @@ export const submitBill = async billData => {
       body: JSON.stringify(billData),
     });
     const responseData = await response.json();
+    console.log(responseData);
     return { ok: response.ok, data: responseData };
   } catch (error) {
-    console.error('Submit bill error:', error);
+    //console.error('Submit bill error:', error);
     Alert.alert('Error', 'Failed to submit bill');
     return { ok: false, error };
   }
