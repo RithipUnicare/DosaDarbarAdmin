@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,9 @@ import {
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
+import { useDispatch } from 'react-redux';
+import { setProducts } from '../redux/slices/productSlice';
+import { getAllProducts } from '../Services/ApiServices';
 
 const { width, height } = Dimensions.get('window');
 
@@ -25,6 +28,19 @@ type RootStackParamList = {
 
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation<NavigationProp<RootStackParamList>>();
+
+  const dispatch = useDispatch();
+
+  useEffect(() => {
+    getAllproducts();
+  }, []);
+
+  const getAllproducts = async () => {
+    const response = await getAllProducts();
+    const data = response?.data?.Item;
+    console.log(data);
+    dispatch(setProducts(data));
+  };
 
   const handleCategoriesPress = () => {
     navigation.navigate('Category');
@@ -109,7 +125,9 @@ const HomeScreen: React.FC = () => {
                   <Text style={styles.cardIconText}>🛎️</Text>
                 </View>
                 <Text style={styles.cardTitle}>Card Details</Text>
-                <Text style={styles.cardSubtitle}>Manage your payment cards</Text>
+                <Text style={styles.cardSubtitle}>
+                  Manage your payment cards
+                </Text>
               </LinearGradient>
             </TouchableOpacity>
 
@@ -139,6 +157,7 @@ const HomeScreen: React.FC = () => {
       {/* Bottom Section - Logout */}
       <View style={styles.bottomSection}>
         <Text style={styles.website}>www.dosadharbar.com</Text>
+        <Text style={styles.website}>1.0.1</Text>
       </View>
     </SafeAreaView>
   );

@@ -18,75 +18,74 @@ import {
 import LinearGradient from 'react-native-linear-gradient';
 import dayjs from 'dayjs';
 import DatePicker from 'react-native-date-picker';
-import {
-  getAllOrders,
-  getCategoryWiseReport,
-  getItemWiseReport,
-  getBillWiseReport,
-} from '../Services/ApiServices';
+import { getOrder } from '../Services/ApiServices';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
-interface OrderItemType {
-  date: string;
-  category: string | null;
-  product: string | null;
+interface OrderListItem {
+  id: string;
+  item_name: string;
   item_price: string;
   quantity: string;
   total_amount: string;
+  date: string; // YYYY-MM-DD
   tableno: string;
-  bill_no?: string;
-  payment_mode?: string;
 }
 
-interface ProcessedOrderType {
-  tableNo: string;
-  date: string;
-  items: OrderItemType[];
-  totalAmount: number;
-  timestamp: string;
+interface OrderDetail {
+  order_list: OrderListItem[];
+  order_id: string;
+  total_amount: string;
+  bill_no: string;
+  instruction: string;
+  date: string; // YYYY-MM-DD HH:mm:ss
 }
 
-type ReportType = 'all' | 'category' | 'item' | 'bill';
 type DatePickerType = 'from' | 'to' | null;
 
-const ReportScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-  const [orders, setOrders] = useState<ProcessedOrderType[]>([]);
-  const [reportData, setReportData] = useState<any[]>([]);
+const ReportScreen: React.FC<{ navigation: any; route: any }> = ({
+  navigation,
+  route,
+}) => {
+  const [orders, setOrders] = useState<OrderDetail[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [reportType, setReportType] = useState<ReportType>('all');
+  const [userId, setUserId] = useState<string>(route?.params?.user_id || '999');
 
   // Date filters
   const [fromDate, setFromDate] = useState<Date>(new Date());
   const [toDate, setToDate] = useState<Date>(new Date());
   const [showDatePicker, setShowDatePicker] = useState<DatePickerType>(null);
 
-  // Filter inputs
-  const [categoryId, setCategoryId] = useState<string>('');
-  const [itemId, setItemId] = useState<string>('');
-  const [billNo, setBillNo] = useState<string>('');
-  const [paymentMode, setPaymentMode] = useState<string>('all');
-
   // UI state
   const [showFilters, setShowFilters] = useState<boolean>(false);
 
   useEffect(() => {
-    if (reportType === 'all') {
-      fetchAllOrders();
-    }
-  }, [reportType]);
+    fetchOrders();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
-  const fetchAllOrders = async () => {
+  const fetchOrders = async () => {
     try {
       setLoading(true);
-      const response = await getAllOrders();
+      const response = await getOrder('Admin');
 
-      if (response.ok && response.data?.Order) {
-        console.log(response.data.Order);
-        processAllOrders(response.data.Order);
+      if (response.ok && Array.isArray(response.data?.order_details)) {
+        const allOrders: OrderDetail[] = response.data.order_details;
+        // local date filter on order header date
+        const startOfDay = dayjs(fromDate).startOf('day');
+        const endOfDay = dayjs(toDate).endOf('day');
+        const filtered = allOrders.filter(o => {
+          const od = dayjs(o.date);
+          return od.isAfter(startOfDay) && od.isBefore(endOfDay);
+        });
+        // sort by date desc then bill no/order_id
+        filtered.sort(
+          (a, b) => dayjs(b.date).valueOf() - dayjs(a.date).valueOf(),
+        );
+        setOrders(filtered);
       } else {
-        Alert.alert('Error', 'Failed to fetch orders data');
+        Alert.alert('Error', 'Failed to fetch orders');
         setOrders([]);
       }
     } catch (error) {
@@ -97,158 +96,13 @@ const ReportScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       setLoading(false);
     }
   };
-
-  const fetchCategoryWiseReport = async () => {
-    if (!categoryId.trim()) {
-      Alert.alert('Error', 'Please enter category ID');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const response = await getCategoryWiseReport(
-        categoryId,
-        dayjs(fromDate).format('YYYY-MM-DD'),
-        dayjs(toDate).format('YYYY-MM-DD'),
-      );
-
-      if (response.ok && response.data?.data) {
-        setReportData(response.data.Order);
-      } else {
-        Alert.alert('Error', 'Failed to fetch category wise report');
-        setReportData([]);
-      }
-    } catch (error) {
-      console.error('Category report error:', error);
-      Alert.alert('Error', 'Network error occurred');
-      setReportData([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchItemWiseReport = async () => {
-    if (!categoryId.trim() || !itemId.trim()) {
-      Alert.alert('Error', 'Please enter both category ID and item ID');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const response = await getItemWiseReport(
-        categoryId,
-        itemId,
-        dayjs(fromDate).format('YYYY-MM-DD'),
-        dayjs(toDate).format('YYYY-MM-DD'),
-      );
-
-      if (response.ok && response.data?.data) {
-        setReportData(response.data.Order);
-      } else {
-        Alert.alert('Error', 'Failed to fetch item wise report');
-        setReportData([]);
-      }
-    } catch (error) {
-      console.error('Item report error:', error);
-      Alert.alert('Error', 'Network error occurred');
-      setReportData([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const fetchBillWiseReport = async () => {
-    try {
-      setLoading(true);
-      const response = await getBillWiseReport(
-        billNo,
-        paymentMode,
-        dayjs(fromDate).format('YYYY-MM-DD'),
-        dayjs(toDate).format('YYYY-MM-DD'),
-      );
-
-      if (response.ok && response.data?.data) {
-        setReportData(response.data.Order);
-      } else {
-        Alert.alert('Error', 'Failed to fetch bill wise report');
-        setReportData([]);
-      }
-    } catch (error) {
-      console.error('Bill report error:', error);
-      Alert.alert('Error', 'Network error occurred');
-      setReportData([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const processAllOrders = (allOrders: OrderItemType[]) => {
-    const startOfDay = dayjs(fromDate).startOf('day');
-    const endOfDay = dayjs(toDate).endOf('day');
-    console.log(startOfDay, endOfDay);
-    // Filter orders for the date range
-    const filteredOrders = allOrders.filter(order => {
-      const orderDate = dayjs(order.date);
-      return orderDate.isAfter(startOfDay) && orderDate.isBefore(endOfDay);
-    });
-    console.log(filteredOrders);
-    // Group orders by table number and date
-    const groupedOrders = filteredOrders.reduce((acc, order) => {
-      const key = `${order.tableno}-${order.date}`;
-      if (!acc[key]) {
-        acc[key] = [];
-      }
-      acc[key].push(order);
-      return acc;
-    }, {} as Record<string, OrderItemType[]>);
-
-    // Convert grouped orders to ProcessedOrderType
-    const processedOrders: ProcessedOrderType[] = Object.entries(
-      groupedOrders,
-    ).map(([key, tableOrders]) => {
-      const [tableNo, date] = key.split('-');
-      const totalAmount = tableOrders.reduce(
-        (sum, item) => sum + parseFloat(item.total_amount),
-        0,
-      );
-
-      return {
-        tableNo,
-        date,
-        items: tableOrders,
-        totalAmount,
-        timestamp: `${date} 12:00:00`,
-      };
-    });
-
-    // Sort by date and table number
-    processedOrders.sort((a, b) => {
-      const dateCompare = dayjs(b.date).valueOf() - dayjs(a.date).valueOf();
-      if (dateCompare !== 0) return dateCompare;
-
-      const aNum = parseInt(a.tableNo) || 0;
-      const bNum = parseInt(b.tableNo) || 0;
-      return aNum - bNum;
-    });
-
-    setOrders(processedOrders);
+  const applyDateFilter = () => {
+    // re-run fetch to apply date filter on server data locally
+    fetchOrders();
   };
 
   const handleGenerateReport = () => {
-    switch (reportType) {
-      case 'all':
-        fetchAllOrders();
-        break;
-      case 'category':
-        fetchCategoryWiseReport();
-        break;
-      case 'item':
-        fetchItemWiseReport();
-        break;
-      case 'bill':
-        fetchBillWiseReport();
-        break;
-    }
+    applyDateFilter();
     setShowFilters(false);
   };
 
@@ -261,36 +115,7 @@ const ReportScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     setShowDatePicker(null);
   };
 
-  const renderReportTypeSelector = () => (
-    <View style={styles.reportTypeContainer}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-        {[
-          { key: 'all', label: 'All Orders' },
-          { key: 'category', label: 'Category Wise' },
-          { key: 'item', label: 'Item Wise' },
-          { key: 'bill', label: 'Bill Wise' },
-        ].map(type => (
-          <TouchableOpacity
-            key={type.key}
-            style={[
-              styles.reportTypeButton,
-              reportType === type.key && styles.reportTypeButtonActive,
-            ]}
-            onPress={() => setReportType(type.key as ReportType)}
-          >
-            <Text
-              style={[
-                styles.reportTypeText,
-                reportType === type.key && styles.reportTypeTextActive,
-              ]}
-            >
-              {type.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </View>
-  );
+  const renderReportTypeSelector = () => null;
 
   const renderFiltersModal = () => (
     <Modal
@@ -326,75 +151,7 @@ const ReportScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
             </View>
           </View>
 
-          {/* Category Filter */}
-          {(reportType === 'category' || reportType === 'item') && (
-            <View style={styles.filterSection}>
-              <Text style={styles.filterLabel}>Category ID</Text>
-              <TextInput
-                style={styles.textInput}
-                value={categoryId}
-                onChangeText={setCategoryId}
-                placeholder="Enter category ID"
-                placeholderTextColor="#666"
-                keyboardType="numeric"
-              />
-            </View>
-          )}
-
-          {/* Item Filter */}
-          {reportType === 'item' && (
-            <View style={styles.filterSection}>
-              <Text style={styles.filterLabel}>Item ID</Text>
-              <TextInput
-                style={styles.textInput}
-                value={itemId}
-                onChangeText={setItemId}
-                placeholder="Enter item ID"
-                placeholderTextColor="#666"
-                keyboardType="numeric"
-              />
-            </View>
-          )}
-
-          {/* Bill Filters */}
-          {reportType === 'bill' && (
-            <>
-              <View style={styles.filterSection}>
-                <Text style={styles.filterLabel}>Bill Number (Optional)</Text>
-                <TextInput
-                  style={styles.textInput}
-                  value={billNo}
-                  onChangeText={setBillNo}
-                  placeholder="Enter bill number"
-                  placeholderTextColor="#666"
-                />
-              </View>
-              <View style={styles.filterSection}>
-                <Text style={styles.filterLabel}>Payment Mode</Text>
-                <View style={styles.paymentModeRow}>
-                  {['all', 'cash', 'card', 'upi'].map(mode => (
-                    <TouchableOpacity
-                      key={mode}
-                      style={[
-                        styles.paymentModeButton,
-                        paymentMode === mode && styles.paymentModeButtonActive,
-                      ]}
-                      onPress={() => setPaymentMode(mode)}
-                    >
-                      <Text
-                        style={[
-                          styles.paymentModeText,
-                          paymentMode === mode && styles.paymentModeTextActive,
-                        ]}
-                      >
-                        {mode.toUpperCase()}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-            </>
-          )}
+          {/* Only date range filter is available */}
 
           <View style={styles.modalActions}>
             <TouchableOpacity
@@ -415,21 +172,24 @@ const ReportScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     </Modal>
   );
 
-  const renderOrderItem = ({ item }: { item: ProcessedOrderType }) => (
+  const renderOrderItem = ({ item }: { item: OrderDetail }) => (
     <View style={styles.orderCard}>
       <LinearGradient colors={['#333', '#222']} style={styles.cardGradient}>
-        <Text style={styles.orderTitle}>Table No: {item.tableNo}</Text>
-        <Text style={styles.orderSubtitle}>
-          Date: {dayjs(item.date).format('DD-MM-YYYY')}
+        <Text style={styles.orderTitle}>
+          Table No: {item.order_list?.[0]?.tableno || '-'}
         </Text>
-        <Text style={styles.orderSubtitle}>Items: {item.items.length}</Text>
+        <Text style={styles.orderSubtitle}>Bill No: {item.bill_no}</Text>
+        <Text style={styles.orderSubtitle}>
+          Date: {dayjs(item.date).format('DD-MM-YYYY HH:mm')}
+        </Text>
+        <Text style={styles.orderSubtitle}>
+          Items: {item.order_list.length}
+        </Text>
 
-        {item.items.map((orderItem, index) => (
+        {item.order_list.map((orderItem, index) => (
           <View key={index} style={styles.cartItemContent}>
             <View style={styles.cartItemRow}>
-              <Text style={styles.cartItemLabel}>
-                {orderItem.product || 'Item'}
-              </Text>
+              <Text style={styles.cartItemLabel}>{orderItem.item_name}</Text>
               <Text style={styles.cartItemValue}>
                 Qty: {orderItem.quantity} x ₹{orderItem.item_price}
               </Text>
@@ -440,57 +200,35 @@ const ReportScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                 ₹{orderItem.total_amount}
               </Text>
             </View>
-            {orderItem.category && (
-              <View style={styles.cartItemRow}>
-                <Text style={styles.cartItemCategory}>
-                  Category: {orderItem.category}
-                </Text>
-              </View>
-            )}
           </View>
         ))}
 
         <View style={styles.totalContainer}>
           <Text style={styles.totalLabel}>Table Total:</Text>
-          <Text style={styles.totalAmount}>₹{item.totalAmount.toFixed(2)}</Text>
+          <Text style={styles.totalAmount}>
+            ₹{parseFloat(item.total_amount).toFixed(2)}
+          </Text>
         </View>
       </LinearGradient>
     </View>
   );
 
-  const renderGenericReportItem = ({ item }: { item: any }) => (
-    <View style={styles.orderCard}>
-      <LinearGradient colors={['#333', '#222']} style={styles.cardGradient}>
-        {Object.entries(item).map(([key, value]) => (
-          <View key={key} style={styles.cartItemRow}>
-            <Text style={styles.cartItemLabel}>{key}:</Text>
-            <Text style={styles.cartItemValue}>{String(value)}</Text>
-          </View>
-        ))}
-      </LinearGradient>
-    </View>
-  );
+  const renderGenericReportItem = () => null;
 
   const renderHeader = () => {
-    const isAllOrders = reportType === 'all';
-    const dataToUse = isAllOrders ? orders : reportData;
+    const dataToUse = orders;
 
     let totalAmount = 0;
     let totalItems = 0;
 
-    if (isAllOrders) {
-      totalAmount = orders.reduce((sum, order) => sum + order.totalAmount, 0);
-      totalItems = orders.reduce((sum, order) => sum + order.items.length, 0);
-    } else {
-      // For other report types, try to calculate totals if possible
-      totalItems = reportData.length;
-      if (reportData.length > 0 && reportData[0].total_amount) {
-        totalAmount = reportData.reduce(
-          (sum, item) => sum + parseFloat(item.total_amount || '0'),
-          0,
-        );
-      }
-    }
+    totalAmount = orders.reduce(
+      (sum, order) => sum + parseFloat(order.total_amount || '0'),
+      0,
+    );
+    totalItems = orders.reduce(
+      (sum, order) => sum + order.order_list.length,
+      0,
+    );
 
     return (
       <View style={styles.header}>
@@ -509,14 +247,7 @@ const ReportScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           </TouchableOpacity>
         </View>
 
-        {renderReportTypeSelector()}
-
-        <Text style={styles.title}>
-          {reportType === 'all' && 'All Orders Report'}
-          {reportType === 'category' && 'Category Wise Report'}
-          {reportType === 'item' && 'Item Wise Report'}
-          {reportType === 'bill' && 'Bill Wise Report'}
-        </Text>
+        <Text style={styles.title}>Orders Report</Text>
 
         <Text style={styles.subtitle}>
           {dayjs(fromDate).format('DD/MM/YY')} -{' '}
@@ -526,25 +257,17 @@ const ReportScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         {dataToUse.length > 0 && (
           <View style={styles.summaryContainer}>
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>
-                Total {isAllOrders ? 'Tables' : 'Records'}:
-              </Text>
+              <Text style={styles.summaryLabel}>Total Orders:</Text>
               <Text style={styles.summaryValue}>{dataToUse.length}</Text>
             </View>
-            {totalItems > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Total Items:</Text>
-                <Text style={styles.summaryValue}>{totalItems}</Text>
-              </View>
-            )}
-            {totalAmount > 0 && (
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Total Amount:</Text>
-                <Text style={styles.summaryTotal}>
-                  ₹{totalAmount.toFixed(2)}
-                </Text>
-              </View>
-            )}
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Total Items:</Text>
+              <Text style={styles.summaryValue}>{totalItems}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Total Amount:</Text>
+              <Text style={styles.summaryTotal}>₹{totalAmount.toFixed(2)}</Text>
+            </View>
           </View>
         )}
       </View>
@@ -572,9 +295,8 @@ const ReportScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
     );
   }
 
-  const dataToRender = reportType === 'all' ? orders : reportData;
-  const renderItem =
-    reportType === 'all' ? renderOrderItem : renderGenericReportItem;
+  const dataToRender = orders;
+  const renderItem = renderOrderItem;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -596,7 +318,7 @@ const ReportScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
       <FlatList
         data={dataToRender}
         renderItem={renderItem}
-        keyExtractor={(item, index) => `${reportType}-${index}`}
+        keyExtractor={(item: any) => `${item.order_id}`}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={renderEmptyComponent}
         contentContainerStyle={styles.listContainer}

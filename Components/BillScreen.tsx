@@ -29,6 +29,8 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import dayjs from 'dayjs';
 import { deleteCard } from '../Services/ApiServices';
+import { useSelector } from 'react-redux';
+import { addOrder } from '../Services/ApiServices';
 
 const { width } = Dimensions.get('window');
 
@@ -71,6 +73,7 @@ const DEFAULT_PRINTER_KEY = 'defaultPrinter';
 
 const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
   const { consolidatedBill } = route.params;
+  console.log(consolidatedBill);
   const [isPrinting, setIsPrinting] = useState(false);
   const [bluetoothEnabled, setBluetoothEnabled] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
@@ -190,7 +193,8 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
       'zebra',
       'citizen',
     ];
-    return printerKeywords.some(keyword => name.includes(keyword));
+    //return printerKeywords.some(keyword => name.includes(keyword));
+    return true;
   };
 
   const scanDevices = async () => {
@@ -279,13 +283,13 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
       Alert.alert('Bluetooth Disabled', 'Please enable Bluetooth first.');
       return;
     }
-    // if (!isConnected) {
-    //   Alert.alert(
-    //     'Not Connected',
-    //     'Please select and connect to a printer first.',
-    //   );
-    //   return;
-    // }
+    if (!isConnected) {
+      Alert.alert(
+        'Not Connected',
+        'Please select and connect to a printer first.',
+      );
+      return;
+    }
     if (!consolidatedBill?.items?.length) {
       Alert.alert('No Items', 'No items available to print.');
       return;
@@ -294,12 +298,12 @@ const BillScreen: React.FC<BillScreenProps> = ({ route, navigation }) => {
     setIsPrinting(true);
     try {
       const totalQuantity = consolidatedBill?.items?.reduce(
-        (sum:any, item:any) => sum + (parseInt(item.quantity as string) || 0),
+        (sum: any, item: any) => sum + (parseInt(item.quantity as string) || 0),
         0,
       );
 
       const itemsText = consolidatedBill.items
-        .map((item:any, index:any) => {
+        .map((item: any, index: any) => {
           const srNo = `${(index + 1).toString().padStart(2, '0')}.`;
           const itemName = (item.name || 'N/A')
             .substring(0, 12)
@@ -347,21 +351,30 @@ ${itemsText}
 
       // Clear the cart after successful print
       try {
-        await AsyncStorage.removeItem(CART_STORAGE_KEY);
+        //await AsyncStorage.removeItem(CART_STORAGE_KEY);
+
+        // for (const item of consolidatedBill.items) {
+        //   const response = await deleteCard(item.cart_id);
+        //   console.log(response);
+        // }
+        Alert.alert('Success', 'Bill printed successfully!');
+        // const storedCart = await AsyncStorage.getItem(CART_STORAGE_KEY);
+        // let cartItems: CartItemType[] = storedCart
+        //   ? JSON.parse(storedCart)
+        //   : [];
+        // cartItems = cartItems.filter(
+        //   item => item.tableno !== consolidatedBill.tableNo,
+        // );
+        const response = await addOrder(
+          consolidatedBill.tableNo,
+          Number(consolidatedBill.totalAmount).toFixed(0),
+          'instruction',
+        );
+        console.log(response);
+        navigation.goBack();
       } catch (error) {
         console.error('Error clearing cart:', error);
       }
-      Alert.alert('Success', 'Bill printed successfully!');
-      const storedCart = await AsyncStorage.getItem(CART_STORAGE_KEY);
-      let cartItems: CartItemType[] = storedCart ? JSON.parse(storedCart) : [];
-      cartItems = cartItems.filter(
-        item => item.tableno !== consolidatedBill.tableNo,
-      );
-      await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
-      for (const item of consolidatedBill.items) {
-        await deleteCard(item.id);
-      }
-      navigation.goBack();
     } catch (error) {
       Alert.alert('Error', 'Failed to print bill. Please try again.');
     } finally {
@@ -523,7 +536,7 @@ ${itemsText}
               <View style={styles.cartItemImageRow}>
                 {item?.item_image ? (
                   <Image
-                    source={{ uri: `${IMAGE_BASE_URL}${item?.item_image}`}}
+                    source={{ uri: `${IMAGE_BASE_URL}${item?.item_image}` }}
                     style={styles.cartItemImage}
                   />
                 ) : (

@@ -44,10 +44,11 @@ export const deleteCard = async id => {
   try {
     console.log('Deleting card with id:', endPoints.deleteCard(id));
     const response = await fetch(endPoints.deleteCard(id), {
-      method: 'DELETE',
+      method: 'GET',
       headers: getHeaders(),
     });
     const responseData = await response.json();
+    console.log(responseData);
     return { ok: response.ok, data: responseData };
   } catch (error) {
     //console.error('Delete card error:', error);
@@ -158,6 +159,58 @@ export const submitBill = async billData => {
   } catch (error) {
     //console.error('Submit bill error:', error);
     Alert.alert('Error', 'Failed to submit bill');
+    return { ok: false, error };
+  }
+};
+
+export const getAllProducts = async () => {
+  try {
+    const response = await fetch(endPoints.getAllProducts, {
+      method: 'GET',
+      headers: getHeaders(),
+    });
+    const responseData = await response.json();
+    console.log(responseData);
+    return { ok: response.ok, data: responseData };
+  } catch (error) {
+    console.error('Get all products error:', error);
+    Alert.alert('Error', 'Failed to fetch all products');
+    return { ok: false, error };
+  }
+};
+
+export const getOrder = async userId => {
+  try {
+    const response = await fetch(endPoints.getOrder(userId), {
+      method: 'GET',
+      headers: getHeaders(),
+    });
+    const responseData = await response.json();
+    console.log(responseData);
+    return { ok: response.ok, data: responseData };
+  } catch (error) {
+    console.error('Get order error:', error);
+    Alert.alert('Error', 'Failed to fetch order');
+    return { ok: false, error };
+  }
+};
+
+export const addOrder = async (table_no, total_amount, instruction) => {
+  try {
+    console.log(endPoints.addOrder(table_no, total_amount, instruction));
+    const response = await fetch(
+      endPoints.addOrder(table_no, total_amount, instruction),
+      {
+        method: 'GET',
+        headers: getHeaders(),
+      },
+    );
+    const responseData = await response.json();
+    console.log(responseData);
+    return { ok: response.ok, data: responseData };
+  } catch (error) {
+    console.error('Add order error:', error);
+    Alert.alert('Error', 'Failed to add order');
     return { ok: false, error };
   }
 };

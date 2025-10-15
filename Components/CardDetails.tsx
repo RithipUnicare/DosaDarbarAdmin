@@ -51,7 +51,7 @@ interface CartDetailsScreenProps {
   route: { params?: { user_id?: string; tableno?: string } };
 }
 
-const GET_CART_API = `${BASE_URL}/get_cart_detailsAdmin`;
+const GET_CART_API = `${BASE_URL}/get_cart_details/Admin`;
 const IMAGE_BASE_URL = `${BASE_URL}/images/`;
 
 const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
@@ -75,7 +75,7 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
       loadCartAndFetchOrders();
     });
 
-    loadCartAndFetchOrders();
+    //loadCartAndFetchOrders();
 
     return unsubscribe;
   }, [navigation, userId]);
@@ -96,22 +96,25 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
+      console.log(response, data);
+      if (data.message === 'Failed to getting Details.') {
+        console.log(' i am in');
+        setCartItems([]);
+        return;
+      }
       const serverItems: CartItemType[] = data?.Item?.filter(
         (item: any) => item.tableno && item.quantity,
       ).map((item: any) => ({
         id: item.id || `${item.id}`,
         product_id: item.id,
         category_id: item.category_id,
-        product_price: item.prices,
+        product_price: item.product_price,
         quantity: item.quantity,
-        total_amount: (
-          parseFloat(item.prices) * parseInt(item.quantity)
-        ).toFixed(2),
-        user_id: userId,
+        total_amount: item?.total_amount,
+        cart_id: item.cart_id,
         tableno: item.tableno,
         name: item.name,
         item_image: item.item_image,
-        served: false,
       }));
 
       const grouped: { [key: string]: CartItemType[] } = {};
@@ -135,12 +138,6 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
         setTableNo(sorted[0]);
       }
     } catch (error) {
-      console.error('Failed to load orders:', error);
-      Alert.alert(
-        'Error',
-        'Failed to load orders. Please check your internet connection.',
-        [{ text: 'OK' }],
-      );
     } finally {
       setLoading(false);
     }
@@ -168,18 +165,18 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
       if (isNaN(parsedPrice)) {
         throw new Error('Invalid product price');
       }
-
+      console.log(item);
       const updatedItem = {
         ...item,
+        edit_id: item.cart_id,
         quantity: newQuantity,
-        total_amount: (parsedPrice * newQuantity).toFixed(2),
+        //total_amount: (parsedPrice * newQuantity).toFixed(2),
       };
 
       const response = await updateCard(updatedItem);
       if (!response.ok) {
         throw new Error('Failed to update cart item');
       }
-
       const updatedCartItems = cartItems.map(cartItem =>
         cartItem.product_id === item.product_id &&
         cartItem.user_id === item.user_id &&
@@ -187,6 +184,7 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
           ? updatedItem
           : cartItem,
       );
+      console.log(updatedCartItems);
 
       const grouped: { [key: string]: CartItemType[] } = {};
       updatedCartItems.forEach(updatedItem => {
@@ -218,7 +216,7 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
           style: 'destructive',
           onPress: async () => {
             try {
-              const response = await deleteCard(item.id);
+              const response = await deleteCard(item.cart_id);
               if (!response.ok) {
                 throw new Error('Failed to delete cart item');
               }
@@ -283,9 +281,9 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
             try {
               const itemsToDelete = groupedByTable[tableNo] || [];
               for (const item of itemsToDelete) {
-                const response = await deleteCard(item.id);
+                const response = await deleteCard(item.cart_id);
                 if (!response.ok) {
-                  throw new Error(`Failed to delete item ${item.id}`);
+                  throw new Error(`Failed to delete item ${item.cart_id}`);
                 }
               }
 

@@ -15,6 +15,7 @@ import {
   TextInput,
   Dimensions,
   Image,
+  ToastAndroid,
 } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import Icon from 'react-native-vector-icons/MaterialIcons';
@@ -134,6 +135,7 @@ const ProductSelectionScreen: React.FC<ProductSelectionScreenProps> = ({
       //console.log(updatedItems);
       //await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(updatedItems));
       for (let product of updatedItems) {
+        console.log(product);
         const postData = {
           product_id: product.product_id,
           category_id: product.category_id,
@@ -144,9 +146,10 @@ const ProductSelectionScreen: React.FC<ProductSelectionScreenProps> = ({
           edit_id: 0,
         };
         const response = await addCard(postData);
-        console.log(response);
+        console.log(response, postData);
       }
-      Alert.alert('Success', 'Item added to cart!', [{ text: 'OK' }]);
+      // Alert.alert('Success', 'Item added to cart!', [{ text: 'OK' }]);
+      ToastAndroid.show('Item added to cart!', ToastAndroid.SHORT);
       setQuantity(1);
       setSelectedProduct(null);
     } catch (error) {

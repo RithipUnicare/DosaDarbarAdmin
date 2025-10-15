@@ -35,6 +35,7 @@ interface ProductType {
   item_image?: string;
   product_image?: string;
   description?: string;
+  edit_id?: number;
 }
 
 interface ProductFormType {
@@ -45,12 +46,16 @@ interface ProductFormType {
   prices: string;
   status: string;
   image: any;
+  edit_id: number;
 }
 
 import type { RootStackParamList } from '../AppNav';
 import type { StackScreenProps } from '@react-navigation/stack';
 
-type GetProductsScreenProps = StackScreenProps<RootStackParamList, 'GetProducts'>;
+type GetProductsScreenProps = StackScreenProps<
+  RootStackParamList,
+  'GetProducts'
+>;
 
 const GetProductsScreen: React.FC<GetProductsScreenProps> = ({
   navigation,
@@ -73,6 +78,7 @@ const GetProductsScreen: React.FC<GetProductsScreenProps> = ({
     prices: '',
     status: 'Active',
     image: null,
+    edit_id: 0,
   });
   const [formLoading, setFormLoading] = useState<boolean>(false);
 
@@ -99,6 +105,7 @@ const GetProductsScreen: React.FC<GetProductsScreenProps> = ({
       }
 
       const Data = await response.json();
+      console.log(Data);
       if (Data['image_link']) {
         setImageBaseUrl(Data['image_link']);
       }
@@ -149,6 +156,7 @@ const GetProductsScreen: React.FC<GetProductsScreenProps> = ({
       prices: '',
       status: 'Active',
       image: null,
+      edit_id: 0,
     });
     setIsEditing(false);
     setShowModal(true);
@@ -171,6 +179,7 @@ const GetProductsScreen: React.FC<GetProductsScreenProps> = ({
         : '',
       status: item.status || 'Active',
       image: null,
+      edit_id: item.edit_id || 0,
     });
     setIsEditing(true);
     setShowModal(true);
@@ -204,7 +213,7 @@ const GetProductsScreen: React.FC<GetProductsScreenProps> = ({
       !productForm.category_id.trim() ||
       !productForm.product_code.trim() ||
       !productForm.prices.trim() ||
-      (!isEditing && !productForm.image)
+      !productForm.image
     ) {
       Alert.alert('Validation', 'All fields and image are required.', [
         { text: 'OK' },
@@ -215,6 +224,7 @@ const GetProductsScreen: React.FC<GetProductsScreenProps> = ({
     try {
       const formData = new FormData();
       if (isEditing && productForm.id) formData.append('id', productForm.id);
+      console.log(productForm);
       formData.append('name', productForm.name);
       formData.append('category_id', productForm.category_id);
       formData.append('product_code', productForm.product_code);
@@ -230,6 +240,7 @@ const GetProductsScreen: React.FC<GetProductsScreenProps> = ({
           name: filename,
           type,
         } as any);
+        formData.append('edit_id', isEditing ? productForm.id : 0);
       }
       const response = await fetch(
         'http://unitech.agency/Dosadharbar/api/v1/add_Products',
@@ -242,6 +253,7 @@ const GetProductsScreen: React.FC<GetProductsScreenProps> = ({
         },
       );
       if (!response.ok) throw new Error('Failed to save product');
+      console.log(response, formData);
       Alert.alert(
         'Success',
         isEditing ? 'Product updated!' : 'Product added!',
@@ -270,6 +282,9 @@ const GetProductsScreen: React.FC<GetProductsScreenProps> = ({
           onPress: async () => {
             try {
               setLoading(true);
+              console.log(
+                `http://unitech.agency/Dosadharbar/api/v1/delete_Product/${id}`,
+              );
               const response = await fetch(
                 `http://unitech.agency/Dosadharbar/api/v1/delete_Product/${id}`,
                 { method: 'GET' },

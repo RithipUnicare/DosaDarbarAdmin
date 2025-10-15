@@ -56,15 +56,21 @@ const DEFAULT_PRINTER_KEY = 'defaultPrinter';
 
 const KitchenScreen: React.FC<KitchenScreenProps> = ({ route, navigation }) => {
   const { kitchenOrder } = route.params as { kitchenOrder: KitchenOrder };
-  const [items, setItems] = useState<CartItemType[]>(kitchenOrder.items.map(item => ({ ...item, served: item.served ?? false })));
+  const [items, setItems] = useState<CartItemType[]>(
+    kitchenOrder.items.map(item => ({ ...item, served: item.served ?? false })),
+  );
   const [isPrinting, setIsPrinting] = useState(false);
   const [bluetoothEnabled, setBluetoothEnabled] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [devices, setDevices] = useState<IBLEPrinter[]>([]);
-  const [selectedDevice, setSelectedDevice] = useState<IBLEPrinter | null>(null);
+  const [selectedDevice, setSelectedDevice] = useState<IBLEPrinter | null>(
+    null,
+  );
   const [showDeviceModal, setShowDeviceModal] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
-  const [defaultPrinterMac, setDefaultPrinterMac] = useState<string | null>(null);
+  const [defaultPrinterMac, setDefaultPrinterMac] = useState<string | null>(
+    null,
+  );
 
   useEffect(() => {
     loadDefaultPrinter();
@@ -124,7 +130,10 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ route, navigation }) => {
         await scanDevices();
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to check Bluetooth status. Please ensure Bluetooth is enabled.');
+      Alert.alert(
+        'Error',
+        'Failed to check Bluetooth status. Please ensure Bluetooth is enabled.',
+      );
     }
   };
 
@@ -135,15 +144,30 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ route, navigation }) => {
       Alert.alert('Success', 'Connected to default printer.');
     } catch (error) {
       console.error('Default printer connection error:', error);
-      Alert.alert('Error', 'Failed to connect to default printer. Scanning for devices...');
+      Alert.alert(
+        'Error',
+        'Failed to connect to default printer. Scanning for devices...',
+      );
       await scanDevices();
     }
   };
 
   const isPotentialPrinter = (device: IBLEPrinter): boolean => {
     const name = device.device_name?.toLowerCase() || '';
-    const printerKeywords = ['printer', 'print', 'thermal', 'pos', 'receipt', 'epson', 'star', 'zebra', 'citizen'];
-    return printerKeywords.some(keyword => name.includes(keyword));
+    const printerKeywords = [
+      'printer',
+      'print',
+      'thermal',
+      'pos',
+      'receipt',
+      'epson',
+      'star',
+      'zebra',
+      'citizen',
+    ];
+    console.log(name);
+    //return printerKeywords.some(keyword => name.includes(keyword));
+    return true;
   };
 
   const scanDevices = async () => {
@@ -152,23 +176,26 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ route, navigation }) => {
     setIsScanning(true);
     try {
       const printers = await BLEPrinter.getDeviceList();
-      
-      
+
       if (Array.isArray(printers) && printers.length > 0) {
         const potentialPrinters = printers.filter(isPotentialPrinter);
-        const devicesToShow = potentialPrinters.length > 0 ? potentialPrinters : printers;
-        
+        const devicesToShow =
+          potentialPrinters.length > 0 ? potentialPrinters : printers;
+
         setDevices(devicesToShow);
-       
+
         setShowDeviceModal(true);
       } else {
         Alert.alert(
-          'No Devices Found', 
+          'No Devices Found',
           'No Bluetooth devices found. Please ensure:\n1. Bluetooth is enabled\n2. Your thermal printer is turned on\n3. The printer is paired in Android Bluetooth settings',
         );
       }
     } catch (error) {
-      Alert.alert('Scan Error', 'Failed to scan for devices. Ensure Bluetooth is enabled and permissions are granted.');
+      Alert.alert(
+        'Scan Error',
+        'Failed to scan for devices. Ensure Bluetooth is enabled and permissions are granted.',
+      );
     } finally {
       setIsScanning(false);
     }
@@ -181,20 +208,21 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ route, navigation }) => {
       setShowDeviceModal(false);
 
       const macAddress = device.inner_mac_address;
-      
+
       if (!macAddress) {
         Alert.alert('Error', 'Device MAC address not found');
         return;
       }
 
-      
-      
       await BLEPrinter.connectPrinter(macAddress);
       setIsConnected(true);
     } catch (error) {
       //console.error('Connection error:', error);
       setIsConnected(false);
-      Alert.alert('Connection Failed', 'Failed to connect to the printer. Please ensure the printer is turned on and paired in Bluetooth settings.');
+      Alert.alert(
+        'Connection Failed',
+        'Failed to connect to the printer. Please ensure the printer is turned on and paired in Bluetooth settings.',
+      );
     }
   };
 
@@ -225,7 +253,10 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ route, navigation }) => {
 
   const handlePrintKitchenOrder = async () => {
     if (Platform.OS === 'ios') {
-      Alert.alert('Not Supported', 'Bluetooth printing requires additional iOS setup with this library.');
+      Alert.alert(
+        'Not Supported',
+        'Bluetooth printing requires additional iOS setup with this library.',
+      );
       return;
     }
     if (!bluetoothEnabled) {
@@ -233,7 +264,10 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ route, navigation }) => {
       return;
     }
     if (!isConnected) {
-      Alert.alert('Not Connected', 'Please select and connect to a printer first.');
+      Alert.alert(
+        'Not Connected',
+        'Please select and connect to a printer first.',
+      );
       return;
     }
     if (!items.length) {
@@ -246,7 +280,9 @@ const KitchenScreen: React.FC<KitchenScreenProps> = ({ route, navigation }) => {
       const itemsText = items
         .map((item, index) => {
           const srNo = `${(index + 1).toString().padStart(2, '0')}.`;
-          const itemName = (item.name || 'N/A').substring(0, 12).padEnd(12, ' ');
+          const itemName = (item.name || 'N/A')
+            .substring(0, 12)
+            .padEnd(12, ' ');
           const quantity = (item.quantity || '0').toString().padStart(1, ' ');
 
           let itemLine = `<L>${srNo} ${itemName}</L>\n`;
@@ -286,11 +322,16 @@ ${itemsText}
 
   const renderDeviceItem = ({ item }: { item: IBLEPrinter }) => (
     <TouchableOpacity
-      style={[styles.deviceItem, isPotentialPrinter(item) && styles.printerDeviceItem]}
+      style={[
+        styles.deviceItem,
+        isPotentialPrinter(item) && styles.printerDeviceItem,
+      ]}
       onPress={() => selectAndConnectPrinter(item)}
     >
       <View style={styles.deviceInfo}>
-        <Text style={styles.deviceName}>{item.device_name || 'Unnamed Device'}</Text>
+        <Text style={styles.deviceName}>
+          {item.device_name || 'Unnamed Device'}
+        </Text>
         {isPotentialPrinter(item) && (
           <Text style={styles.printerLabel}>Thermal Printer</Text>
         )}
@@ -316,13 +357,16 @@ ${itemsText}
             </TouchableOpacity>
           </View>
           <Text style={styles.modalSubtitle}>
-            {isScanning ? 'Scanning for devices...' : 'Select a device to connect'}
+            {isScanning
+              ? 'Scanning for devices...'
+              : 'Select a device to connect'}
           </Text>
           {devices.length === 0 && !isScanning && (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>No devices found</Text>
               <Text style={styles.emptySubtext}>
-                Ensure Bluetooth is enabled and your thermal printer is turned on and paired.
+                Ensure Bluetooth is enabled and your thermal printer is turned
+                on and paired.
               </Text>
             </View>
           )}
@@ -348,7 +392,13 @@ ${itemsText}
     </Modal>
   );
 
-  const renderItem = ({ item, index }: { item: CartItemType; index: number }) => (
+  const renderItem = ({
+    item,
+    index,
+  }: {
+    item: CartItemType;
+    index: number;
+  }) => (
     <View style={styles.itemCard}>
       <LinearGradient colors={['#333', '#222']} style={styles.cardGradient}>
         <Text style={styles.itemName}>{item.name || 'Unknown'}</Text>
@@ -358,7 +408,9 @@ ${itemsText}
           onPress={() => !item.served && handleServeItem(index)}
           disabled={item.served}
         >
-          <Text style={styles.serveButtonText}>{item.served ? 'Served' : 'Serve'}</Text>
+          <Text style={styles.serveButtonText}>
+            {item.served ? 'Served' : 'Serve'}
+          </Text>
         </TouchableOpacity>
       </LinearGradient>
     </View>
@@ -466,16 +518,18 @@ ${itemsText}
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#000" />
       {renderDeviceModal()}
-      
+
       <FlatList
         data={items}
         renderItem={renderItem}
-        keyExtractor={item => item.id?.toString() || `${item.product_id}-${item.tableno}`}
+        keyExtractor={item =>
+          item.id?.toString() || `${item.product_id}-${item.tableno}`
+        }
         ListHeaderComponent={renderHeader}
         contentContainerStyle={styles.listContainer}
         showsVerticalScrollIndicator={false}
       />
-      
+
       {renderControlButtons()}
     </SafeAreaView>
   );
