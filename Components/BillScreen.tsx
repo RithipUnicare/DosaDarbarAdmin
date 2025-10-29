@@ -570,7 +570,7 @@ ${itemsText}
                 <View style={styles.cartItemRow}>
                   <Text style={styles.cartItemLabel}>Total:</Text>
                   <Text style={styles.cartItemTotal}>
-                    ₹{item?.total_amount}
+                    ₹{(item?.product_price * item?.quantity).toFixed(2)}
                   </Text>
                 </View>
               </View>

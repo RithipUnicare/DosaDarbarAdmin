@@ -496,7 +496,10 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
             ₹
             {(groupedByTable[tableNo] || [])
               .reduce(
-                (sum, item) => sum + parseFloat(item.total_amount as string),
+                (sum, item) =>
+                  sum +
+                  parseFloat(item.quantity as string) *
+                    parseFloat(item.product_price as string),
                 0,
               )
               .toFixed(2)}
@@ -597,7 +600,13 @@ const CartDetailsScreen: React.FC<CartDetailsScreenProps> = ({
     }
     const itemsForTable = groupedByTable[tableNo] || [];
     const totalAmount = itemsForTable
-      .reduce((sum, item) => sum + parseFloat(item.total_amount as string), 0)
+      .reduce(
+        (sum, item) =>
+          sum +
+          parseFloat(item.quantity as string) *
+            parseFloat(item.product_price as string),
+        0,
+      )
       .toFixed(2);
     const consolidatedBill: ConsolidatedBillType = {
       items: itemsForTable,
